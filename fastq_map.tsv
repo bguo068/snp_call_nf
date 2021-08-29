@@ -1,0 +1,13 @@
+Sample	Host_id	Run	Mate_id	Fastq
+ASAP001	0	r1	1	test_data/fastq/ASAP001_1.fastq.gz
+ASAP001	0	r1	2	test_data/fastq/ASAP001_2.fastq.gz
+ASAP002	0	r1	1	test_data/fastq/ASAP002_1.fastq.gz
+ASAP002	0	r1	2	test_data/fastq/ASAP002_2.fastq.gz
+ASAP007	0	r1	1	test_data/fastq/ASAP007_1.fastq.gz
+ASAP007	0	r1	2	test_data/fastq/ASAP007_2.fastq.gz
+ASAP009	0	r1	1	test_data/fastq/ASAP009_1.fastq.gz
+ASAP009	0	r1	2	test_data/fastq/ASAP009_2.fastq.gz
+ASAP010	0	r1	1	test_data/fastq/ASAP010_1.fastq.gz
+ASAP010	0	r1	2	test_data/fastq/ASAP010_2.fastq.gz
+ASAP010	0	r2	1	test_data/fastq/ASAP010_1.fastq.gz
+ASAP010	0	r2	2	test_data/fastq/ASAP010_2.fastq.gz

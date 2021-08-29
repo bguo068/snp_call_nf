@@ -1,0 +1,7 @@
+/ref/*
+!/ref/Readme.md
+/results/*
+/.nextflow*
+/work/*
+/result*
+.DS_Store

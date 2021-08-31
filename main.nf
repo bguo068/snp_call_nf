@@ -382,5 +382,5 @@ workflow {
     GATK_APPLY_VQSR(
         GATK_SELECT_VARIANTS.out.combine(GATK_VARIANT_RECALIBRATOR.out, by: 0),
         params.vqsr_mode, 
-        paths.parasite.fasta) | view
+        paths.parasite.fasta)
 }

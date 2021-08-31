@@ -15,11 +15,9 @@
 
 # Known-site vcf files
 
-1. Resource is mentioned in the `"##_COMMENT4": "KNOWN SITES RESOURCES"` block from
-[](https:
-//github.com/gatk-workflows/broad-prod-wgs-germline-snps-indels/blob/master/JointGenotypingWf.hg38.inputs.json)
- and [](https:
-//github.com/gatk-workflows/gatk4-genome-processing-pipeline/blob/master/WholeGenomeGermlineSingleSample.inputs.json)
+1. Resource is mentioned in the `##_COMMENT4": "KNOWN SITES RESOURCES` block from
+[here](https://github.com/gatk-workflows/broad-prod-wgs-germline-snps-indels/blob/master/JointGenotypingWf.hg38.inputs.json)
+ and [here](https://github.com/gatk-workflows/gatk4-genome-processing-pipeline/blob/master/WholeGenomeGermlineSingleSample.inputs.json)
 
 2. Here 3 are used:
 ```
@@ -43,7 +41,9 @@ TODO: need to find the resource of the known site vcf for P.f.
 
 # Local copies of these ref files can be found on 
 
-- Rosalind:
-- Thanos/IGS
+- Rosalind: 
+`/local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/`
+- Thanos/IGS:
+`/local/projects-t3/toconnor_grp/bing.guo/ref/`
 
 

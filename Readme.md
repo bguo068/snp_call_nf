@@ -31,6 +31,9 @@ ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/
 # Important files
 
 1. Main input file is `./fastq_map.tsv`
+    - Five columns: string, interger, string, interger, string
+    - `Host_id` is the index of host genomes from 0, see `params.host` in nextflow.config file
+    - `Mate_id` can be 0 for single-end sequencing, or 1 and 2 for pair-end sequencing
 2. Main configureation file is `./nextflow.config`
     - Be sure to edit sge config about `clusterOptions = "-P toconnor-lab -cwd -V"` to reflect your lab specifc sge qsub option
 3. Main pipeline script is `./main.nf`

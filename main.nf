@@ -3,6 +3,7 @@
 nextflow.enable.dsl = 2
 
 process BOWTIE2_ALIGN_TO_HOST {
+    tag "$meta.Sample~$meta.Run"
     input:
     tuple val(meta), path(fastq)
     output:
@@ -15,6 +16,7 @@ process BOWTIE2_ALIGN_TO_HOST {
     """
 }
 process SAMTOOLS_VIEW_RM_HOST_READS {
+    tag "$meta.Sample~$meta.Run"
     input:
     tuple val(meta), path(bam)
     output:
@@ -27,6 +29,7 @@ process SAMTOOLS_VIEW_RM_HOST_READS {
     """
 }
 process SAMTOOLS_FASTQ {
+    tag "$meta.Sample~$meta.Run"
     input:
     tuple val(meta), path(bam)
     output:
@@ -44,6 +47,7 @@ process SAMTOOLS_FASTQ {
     """
 }
 process BOWTIE2_ALIGN_TO_PARASITE {
+    tag "$meta.Sample~$meta.Run"
     input:
     tuple val(meta), path(fastq)
     val (parasite_ref_prefix)
@@ -59,6 +63,7 @@ process BOWTIE2_ALIGN_TO_PARASITE {
 }
 
 process PICARD_MERGE_SORT_BAMS{
+    tag "$sample"
     input:
     tuple val(sample), path(bams)
     output:
@@ -83,6 +88,7 @@ process PICARD_MERGE_SORT_BAMS{
 }
 
 process PICARD_MARK_DUPLICATES {
+    tag "$sample"
     input:
     tuple val(sample), path(bam)
     output:
@@ -97,6 +103,7 @@ process PICARD_MARK_DUPLICATES {
     """
 }
 process GATK_BASE_RECALIBRATOR {
+    tag "$sample"
     input:
     tuple val(sample), path(bam)
     val(ref)
@@ -112,6 +119,7 @@ process GATK_BASE_RECALIBRATOR {
     """
 }
 process GATK_APPLY_BQSR {
+    tag "$sample"
     publishDir "$params.outdir/recalibrated"
     input:
     tuple val(sample), path(bam), path(recal_table)
@@ -127,6 +135,7 @@ process GATK_APPLY_BQSR {
 }
 
 process BEDTOOLS_GENOMECOV {
+    tag "$sample"
     publishDir "$params.outdir/coverage"
     input:
     tuple val(sample), path(bam)
@@ -141,6 +150,7 @@ process BEDTOOLS_GENOMECOV {
 }
 
 process SAMTOOLS_FLAGSTAT {
+    tag "$sample"
     publishDir "$params.outdir/flagstat"
     input:
     tuple val(sample), path(bam)
@@ -153,6 +163,7 @@ process SAMTOOLS_FLAGSTAT {
     
 }
 process GATK_HAPLOTYPE_CALLER {
+    tag "$sample"
     publishDir "$params.outdir/gvcf"
     input: 
     tuple val(sample), path(bam)
@@ -168,6 +179,7 @@ process GATK_HAPLOTYPE_CALLER {
 }
 
 process GATK_GENOMICS_DB_IMPORT {
+    tag "$interval"
     input:
     val(interval)
     path(gvcf_map)
@@ -187,6 +199,7 @@ process GATK_GENOMICS_DB_IMPORT {
 }
 
 process GATK_GENOTYPE_GVCFS {
+    tag "$dbname"
     input:
     path(db)
     val(ref)
@@ -201,6 +214,7 @@ process GATK_GENOTYPE_GVCFS {
     """
 }
 process GATK_SELECT_VARIANTS {
+    tag "$dbname"
     input:
     tuple val(dbname), path(vcf), path(idx)
     val(ref)
@@ -215,6 +229,7 @@ process GATK_SELECT_VARIANTS {
 }
 
 process GATK_VARIANT_FILTRATION {
+    tag "$dbname"
     publishDir "$params.outdir/hardfilt"
     input:
     tuple val(dbname), path(vcf), path(idx)
@@ -260,6 +275,7 @@ def get_vqsr_resources (resources) {
 }
 
 process GATK_VARIANT_RECALIBRATOR {
+    tag "$dbname"
     input:
     tuple val(dbname), path(vcf), path(idx)
     val(resources)

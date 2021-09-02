@@ -12,6 +12,8 @@
 - fastq index (fai file): `samtoools faidx hg38.fasta`
 - gatk .dict file: 
 `gatk --java-options "-Xmx5G" CreateSequenceDictionary -R hg38.fasta -O hg38.dict`
+- gatk .idx file:
+`gatk IndexFeatureFile -I your.vcf`
 
 # Known-site vcf files
 

@@ -1,0 +1,34 @@
+name: moimix
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-devtools
+  - r-biocmanager
+  - r-mcmcpack
+  - bioconductor-seqvartools
+  - bioconductor-seqarray
+  - r-bh
+  - bioconductor-biostrings
+  - r-fansi
+  - r-foreach
+  - r-futile.options
+  - r-labeling
+  - r-munsell 
+  - r-snow
+  - bioconductor-biocparallel
+  - r-codetools
+  - r-farver
+  - r-formatr
+  - bioconductor-genomeinfodb
+  - r-lambda.r 
+  - r-rcolorbrewer
+  - r-viridislite
+  - bioconductor-biocversion
+  - r-colorspace
+  - r-flexmix
+  - r-futile.logger
+  - r-iterators
+  - r-modeltools
+  - r-scales

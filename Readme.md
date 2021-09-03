@@ -14,13 +14,11 @@ cd snp_call_nf
 
 On IGS server
 ```
-mkdir ref
 ln -s /local/projects-t3/toconnor_grp/bing.guo/ref/* ref/
 ```
 
 On Rosalind, the reference file can be linked by running
 ```
-mkdir ref
 ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/
 ```
 

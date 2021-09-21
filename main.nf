@@ -237,15 +237,13 @@ process GATK_VARIANT_FILTRATION {
     output:
     tuple val(dbname), path("*.snp.hardfilt.vcf"), path("*.snp.hardfilt.vcf.idx")
     shell:
+    def filter_str = ''
+    params.hard_filters.each {filter_str+= " -filter \"${it.filter}\" --filter-name \"${it.name}\" "}
     """
     gatk --java-options "-Xmx${task.memory.giga}G" VariantFiltration \
+    ${filter_str} \
 	-R ${ref} \
 	-V ${vcf} \
-	-filter "QD<2.0" --filter-name "QD2" \
-	-filter "FS>60.0" --filter-name "FS60" \
-	-filter "MQ<40.0" --filter-name "MQ40" \
-	-filter "MQRankSum<-12.5" --filter-name "MQRankSum-12.5" \
-	-filter "ReadPosRankSum<-8.0" --filter-name "ReadPosRankSum-8" \
 	-O ${dbname}.snp.hardfilt.vcf
     """
 }
@@ -386,17 +384,21 @@ workflow {
     GATK_SELECT_VARIANTS(GATK_GENOTYPE_GVCFS.out, paths.parasite.fasta) 
 
     // Hard filtering and Keep 'PASS' variants
-    GATK_VARIANT_FILTRATION(GATK_SELECT_VARIANTS.out, paths.parasite.fasta) 
+    if (params.hard == true) {
+        GATK_VARIANT_FILTRATION(GATK_SELECT_VARIANTS.out, paths.parasite.fasta) 
+    }
 
     // VQSR variant filtering
-    GATK_VARIANT_RECALIBRATOR( 
-        GATK_SELECT_VARIANTS.out, 
-        params.vqsr_resources, 
-        params.vqsr_opts, 
-        params.vqsr_mode, 
-        paths.parasite.fasta)
-    GATK_APPLY_VQSR(
-        GATK_SELECT_VARIANTS.out.combine(GATK_VARIANT_RECALIBRATOR.out, by: 0),
-        params.vqsr_mode, 
-        paths.parasite.fasta)
+    if (params.vqsr == true) {
+        GATK_VARIANT_RECALIBRATOR( 
+            GATK_SELECT_VARIANTS.out, 
+            params.vqsr_resources, 
+            params.vqsr_opts, 
+            params.vqsr_mode, 
+            paths.parasite.fasta)
+        GATK_APPLY_VQSR(
+            GATK_SELECT_VARIANTS.out.combine(GATK_VARIANT_RECALIBRATOR.out, by: 0),
+            params.vqsr_mode, 
+            paths.parasite.fasta)
+    }
 }

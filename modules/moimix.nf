@@ -2,7 +2,7 @@ nextflow.enable.dsl = 2
 
 process R_MOIMIX_FWS {
     publishDir "result"
-    conda "./modules/moimix_env.yaml"
+    conda "$projectDir/modules/moimix_env.yaml"
     input: 
     path(vcf)
     output:

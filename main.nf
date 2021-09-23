@@ -362,7 +362,12 @@ workflow {
 
     // Generate stat files
     BEDTOOLS_GENOMECOV(GATK_APPLY_BQSR.out, paths.parasite.fasta)
-    SAMTOOLS_FLAGSTAT(GATK_APPLY_BQSR.out)
+
+    bams_to_host = BOWTIE2_ALIGN_TO_HOST.out | map {meta, bam -> ["HOST~$meta.Sample~$meta.Run", bam]}
+    recal_bam_to_parsite = GATK_APPLY_BQSR.out 
+    bam_mixed = recal_bam_to_parsite.mix(bams_to_host)
+
+    SAMTOOLS_FLAGSTAT(bam_mixed)
 
     // Generate gvcf
     GATK_HAPLOTYPE_CALLER(GATK_APPLY_BQSR.out, paths.parasite.fasta)

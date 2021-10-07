@@ -191,7 +191,7 @@ process GATK_GENOMICS_DB_IMPORT {
     """
     gatk --java-options "-Xmx${mem}G" \
         GenomicsDBImport \
-        --batch-size 100 --consolidate true \
+        --batch-size 100 --reader-threads 5 --consolidate true \
         --sample-name-map ${gvcf_map} \
         --genomicsdb-workspace-path $dbname \
         -L $interval

@@ -23,7 +23,11 @@ ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/
 ```
 
 4. Run the pipeline
-    - Test it on HPC (local): `nextflow main.nf`
+    - Test it on HPC (local): `nextflow main.nf --gatk_tmpdir /path/to/your/tmpdir`
+        - NOTE: there seems to have permission issues of the /tmp folder on Rosalind which 
+        cause errors for some gatk commands. You can make your own folder outside of /tmp 
+        folder or its subfolders and specifiy with the `gatk_tmpdir` option on the nextflow
+        command.
     - Test it on SGE server: `nextflow main.nf -profile sge`
 
 # Important files

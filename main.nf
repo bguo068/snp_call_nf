@@ -75,13 +75,13 @@ process PICARD_MERGE_SORT_BAMS{
     def sort_opts = "-VALIDATION_STRINGENCY LENIENT -USE_JDK_DEFLATER true -USE_JDK_INFLATER true"
     """
     if $to_merge; then
-        gatk --java-options "-Xmx${task.memory.giga}G" \
+        gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
 	MergeSamFiles -I $in_bams -O merged.bam $merge_opts
     else
        ln -s $bams merged.bam
     fi
 
-    gatk --java-options "-Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
         SortSam -I merged.bam -O merged_sorted.bam --SORT_ORDER coordinate $sort_opts
     rm merged.bam
     """
@@ -96,7 +96,7 @@ process PICARD_MARK_DUPLICATES {
     shell:
     def opts = "--USE_JDK_DEFLATER true --USE_JDK_INFLATER true"
     """
-    gatk --java-options "-Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
     MarkDuplicates \
 	--REMOVE_DUPLICATES $opts \
         -I $bam -O ${sample}_dedup.bam --METRICS_FILE dedup_metrics.txt
@@ -113,7 +113,7 @@ process GATK_BASE_RECALIBRATOR {
     shell:
     def known_sites_str = known_sites.join(" --known_sites ")
     """
-    gatk --java-options "-Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir}  -Xmx${task.memory.giga}G" \
         BaseRecalibrator -I $bam -O recal_data.table \
 	-R ${ref} --known-sites ${known_sites_str} 
     """
@@ -128,7 +128,7 @@ process GATK_APPLY_BQSR {
     tuple val(sample), path("*recalibrated.bam")
     shell:
     """
-    gatk --java-options "-Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
         ApplyBQSR -I $bam -O ${sample}_recalibrated.bam \
         -R ${ref} --bqsr-recal-file $recal_table
     """
@@ -172,7 +172,7 @@ process GATK_HAPLOTYPE_CALLER {
     tuple val(sample), path("*.g.vcf"), path("*.g.vcf.idx")
     shell:
     """
-    gatk --java-options "-Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
         HaplotypeCaller \
 	-I $bam -O ${sample}.g.vcf -R ${ref} -ERC GVCF
     """
@@ -189,7 +189,7 @@ process GATK_GENOMICS_DB_IMPORT {
     def dbname = interval.replaceAll(":", "~")
     def mem = Math.round(task.memory.giga * 0.75) // the rest of memory for c/c++ library
     """
-    gatk --java-options "-Xmx${mem}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${mem}G" \
         GenomicsDBImport \
         --batch-size 100 --reader-threads 5 --consolidate true \
         --sample-name-map ${gvcf_map} \
@@ -209,7 +209,7 @@ process GATK_GENOTYPE_GVCFS {
     dbname = db.getName()
     def mem = Math.round(task.memory.giga * 0.75) // the rest of memory for TileDB library
     """
-    gatk --java-options "-Xmx${mem}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${mem}G" \
         GenotypeGVCFs -V gendb://${dbname} -O ${dbname}.vcf -R ${ref}
     """
 }
@@ -222,7 +222,7 @@ process GATK_SELECT_VARIANTS {
     tuple val(dbname), path("*.snp.vcf"), path("*.snp.vcf.idx")
     shell:
     """
-    gatk --java-options "-Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
         SelectVariants --select-type-to-include SNP \
         -R $ref -V $vcf -O ${dbname}.snp.vcf
     """
@@ -240,7 +240,7 @@ process GATK_VARIANT_FILTRATION {
     def filter_str = ''
     params.hard_filters.each {filter_str+= " -filter \"${it.filter}\" --filter-name \"${it.name}\" "}
     """
-    gatk --java-options "-Xmx${task.memory.giga}G" VariantFiltration \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" VariantFiltration \
     ${filter_str} \
 	-R ${ref} \
 	-V ${vcf} \
@@ -285,7 +285,7 @@ process GATK_VARIANT_RECALIBRATOR {
     shell:
     def resources_str = get_vqsr_resources(resources)
     """
-    gatk --java-options "-Xmx${task.memory.giga}G" VariantRecalibrator \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" VariantRecalibrator \
         -R $ref -V $vcf $resources_str $opts -mode $mode \
         -O ${dbname}.recal.vcf --tranches-file ${dbname}.all.tranches
     """
@@ -301,8 +301,8 @@ process GATK_APPLY_VQSR {
     tuple val(dbname), path("*.vqsrfilt.*.vcf")
     shell:
     """
-    gatk --java-options "-Xmx${task.memory.giga}G" IndexFeatureFile -I $recal
-    gatk --java-options "-Xmx${task.memory.giga}G" ApplyVQSR \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" IndexFeatureFile -I $recal
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" ApplyVQSR \
         -R $ref -V $vcf --recal-file $recal --tranches-file $tranches -mode $mode \
         --output ${dbname}.vqsrfilt.${mode}.vcf
     """

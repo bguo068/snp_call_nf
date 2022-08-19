@@ -354,10 +354,10 @@ workflow {
         | groupTuple 
     
     // For each sample, merge and sort bam files of different runs 
-    merge_input | PICARD_MERGE_SORT_BAMS 
+    merge_input | PICARD_MERGE_SORT_BAMS | PICARD_MARK_DUPLICATES
 
     // Base recalibration
-    GATK_BASE_RECALIBRATOR(PICARD_MERGE_SORT_BAMS.out, paths.parasite.fasta, paths.known_sites )
+    GATK_BASE_RECALIBRATOR(PICARD_MARK_DUPLICATES.out, paths.parasite.fasta, paths.known_sites )
     GATK_APPLY_BQSR (GATK_BASE_RECALIBRATOR.out, paths.parasite.fasta)
 
     // Generate stat files

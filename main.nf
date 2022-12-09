@@ -14,7 +14,10 @@ process BOWTIE2_ALIGN_TO_HOST {
     bowtie2 -x $meta.Host_ref_prefix  $reads | \
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_host.bam
     """
+    stub:
+    """ touch ${meta.Sample}~${meta.Run}~to_host.bam """
 }
+
 process SAMTOOLS_VIEW_RM_HOST_READS {
     tag "$meta.Sample~$meta.Run"
     input:
@@ -27,7 +30,10 @@ process SAMTOOLS_VIEW_RM_HOST_READS {
     samtools view -b $flag $bam | \
         samtools sort -n -o ${meta.Sample}~${meta.Run}~unmapped_sorted.bam
     """
+    stub:
+    """ touch ${meta.Sample}~${meta.Run}~unmapped_sorted.bam """
 }
+
 process SAMTOOLS_FASTQ {
     tag "$meta.Sample~$meta.Run"
     input:
@@ -45,7 +51,11 @@ process SAMTOOLS_FASTQ {
     samtools fastq -@ $task.cpus $bam \
         -o /dev/null -s /dev/null -0 f.fastq.gz -n  
     """
+    stub:
+    if(meta.is_paired) """ touch f1.fastq.gz f2.fastq.gz """
+    else               """ touch f.fastq.gz """
 }
+
 process BOWTIE2_ALIGN_TO_PARASITE {
     tag "$meta.Sample~$meta.Run"
     input:
@@ -60,6 +70,8 @@ process BOWTIE2_ALIGN_TO_PARASITE {
     bowtie2 -x $parasite_ref_prefix $reads $read_group | \
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_parasite.bam
     """
+    stub:
+    """ touch ${meta.Sample}~${meta.Run}~to_parasite.bam """
 }
 
 process PICARD_MERGE_SORT_BAMS{
@@ -85,6 +97,8 @@ process PICARD_MERGE_SORT_BAMS{
         SortSam -I merged.bam -O merged_sorted.bam --SORT_ORDER coordinate $sort_opts
     rm merged.bam
     """
+    stub:
+    """ touch merged_sorted.bam """
 }
 
 process PICARD_MARK_DUPLICATES {
@@ -101,7 +115,10 @@ process PICARD_MARK_DUPLICATES {
 	--REMOVE_DUPLICATES $opts \
         -I $bam -O ${sample}_dedup.bam --METRICS_FILE dedup_metrics.txt
     """
+    stub:
+    """ touch ${sample}_dedup.bam """
 }
+
 process GATK_BASE_RECALIBRATOR {
     tag "$sample"
     input:
@@ -117,7 +134,10 @@ process GATK_BASE_RECALIBRATOR {
         BaseRecalibrator -I $bam -O recal_data.table \
 	-R ${ref} --known-sites ${known_sites_str} 
     """
+    stub: 
+    """ touch recal_data.table """
 }
+
 process GATK_APPLY_BQSR {
     tag "$sample"
     publishDir "$params.outdir/recalibrated"
@@ -132,6 +152,8 @@ process GATK_APPLY_BQSR {
         ApplyBQSR -I $bam -O ${sample}_recalibrated.bam \
         -R ${ref} --bqsr-recal-file $recal_table
     """
+    stub: 
+    """ touch ${sample}_recalibrated.bam """
 }
 
 process BEDTOOLS_GENOMECOV {
@@ -147,6 +169,8 @@ process BEDTOOLS_GENOMECOV {
     bedtools genomecov -d -ibam $bam -g ${ref} | \
         gzip -v > ${sample}_recalibrated.coverage.gz
     """
+    stub:
+    """ touch ${sample}_recalibrated.coverage.gz """
 }
 
 process SAMTOOLS_FLAGSTAT {
@@ -160,8 +184,10 @@ process SAMTOOLS_FLAGSTAT {
     """
     samtools flagstat $bam > ${sample}.flagstat
     """
-    
+    stub:
+    """ touch ${sample}.flagstat """
 }
+
 process GATK_HAPLOTYPE_CALLER {
     tag "$sample"
     publishDir "$params.outdir/gvcf"
@@ -176,6 +202,8 @@ process GATK_HAPLOTYPE_CALLER {
         HaplotypeCaller \
 	-I $bam -O ${sample}.g.vcf -R ${ref} -ERC GVCF
     """
+    stub:
+    """ touch ${sample}.g.vcf{,.idx} """
 }
 
 process GATK_GENOMICS_DB_IMPORT {
@@ -196,23 +224,33 @@ process GATK_GENOMICS_DB_IMPORT {
         --genomicsdb-workspace-path $dbname \
         -L $interval
     """
+    stub:
+    def dbname = interval.replaceAll(":", "~")
+    """ mkdir $dbname """
 }
 
 process GATK_GENOTYPE_GVCFS {
-    tag "$dbname"
+    tag "${db.getName()}"
     input:
     path(db)
     val(ref)
     output:
-    tuple val(dbname), path("*.vcf"), path("*.idx")
+    tuple env(DBNAME), path("*.vcf"), path("*.idx")
     shell:
-    dbname = db.getName()
+    def dbname = db.getName()
     def mem = Math.round(task.memory.giga * 0.75) // the rest of memory for TileDB library
+
+    // use environmental variable to pass value to output channel
     """
+    DBNAME=${dbname}
     gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${mem}G" \
         GenotypeGVCFs -V gendb://${dbname} -O ${dbname}.vcf -R ${ref}
     """
+    stub:
+    def dbname = db.getName()
+    """ touch ${dbname}.vcf{,.idx}; DBNAME="${dbname}" """
 }
+
 process GATK_SELECT_VARIANTS {
     tag "$dbname"
     input:
@@ -226,6 +264,8 @@ process GATK_SELECT_VARIANTS {
         SelectVariants --select-type-to-include SNP \
         -R $ref -V $vcf -O ${dbname}.snp.vcf
     """
+    stub:
+    """touch ${dbname}.snp.vcf{,.idx} """
 }
 
 process GATK_VARIANT_FILTRATION {
@@ -246,6 +286,8 @@ process GATK_VARIANT_FILTRATION {
 	-V ${vcf} \
 	-O ${dbname}.snp.hardfilt.vcf
     """
+    stub:
+    """ touch ${dbname}.snp.hardfilt.vcf{,.idx}"""
 }
 
 def get_vqsr_resources (resources) {
@@ -289,6 +331,8 @@ process GATK_VARIANT_RECALIBRATOR {
         -R $ref -V $vcf $resources_str $opts -mode $mode \
         -O ${dbname}.recal.vcf --tranches-file ${dbname}.all.tranches
     """
+    stub:
+    """ touch ${dbname}.recal.vcf  ${dbname}.all.tranches """
 }
 process GATK_APPLY_VQSR {
     publishDir "$params.outdir/vqsrfilt"
@@ -306,6 +350,8 @@ process GATK_APPLY_VQSR {
         -R $ref -V $vcf --recal-file $recal --tranches-file $tranches -mode $mode \
         --output ${dbname}.vqsrfilt.${mode}.vcf
     """
+    stub:
+    """ touch ${dbname}.vqsrfilt.${mode}.vcf """
 }
 
 workflow {

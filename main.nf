@@ -2,6 +2,18 @@
 
 nextflow.enable.dsl = 2
 
+def print_parameters() {
+    println("""======================== PARAMETERS ==========================
+fq_map:\t${file(params.fq_map)}
+split:\t${params.split}
+filtering:
+\thard:\t ${params.hard}
+\tvqsr:\t ${params.vqsr}
+outdir:\t${params.outdir}
+tmpdir:\t${params.gatk_tmpdir}
+=============================================================""")
+}
+
 process BOWTIE2_ALIGN_TO_HOST {
     tag "$meta.Sample~$meta.Run"
     input:
@@ -356,6 +368,9 @@ process GATK_APPLY_VQSR {
 
 workflow {
 
+    // print key parameters
+    print_parameters()
+
     // Get paths
     def paths = [:]
     paths.parasite = [fasta : file(params.parasite.fasta),  \
@@ -365,6 +380,12 @@ workflow {
     params.host.fasta_prefix.each {it -> paths.host.fasta_prefix.add(file(it))}
     paths.known_sites = []
     params.known_sites.each {it -> paths.known_sites.add(file(it))}
+
+    // prepare tmpdir for gatk
+    def tmpdir = file(params.gatk_tmpdir)
+    if (!tmpdir.exists()) {
+        file.mkdirs()
+    }
 
     // Prepare input chanel
     input_ch = channel.fromPath(params.fq_map) \

@@ -206,7 +206,7 @@ process GATK_GENOTYPE_GVCFS {
     output:
     tuple val(dbname), path("*.vcf"), path("*.idx")
     shell:
-    dbname = db.getName()
+    def dbname = db.getName()
     def mem = Math.round(task.memory.giga * 0.75) // the rest of memory for TileDB library
     """
     gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${mem}G" \

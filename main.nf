@@ -199,16 +199,17 @@ process GATK_GENOMICS_DB_IMPORT {
 }
 
 process GATK_GENOTYPE_GVCFS {
-    tag "$dbname"
+    tag "${db.getName()}"
     input:
     path(db)
     val(ref)
     output:
-    tuple val(dbname), path("*.vcf"), path("*.idx")
+    tuple env(DBNAME), path("*.vcf"), path("*.idx")
     shell:
     def dbname = db.getName()
     def mem = Math.round(task.memory.giga * 0.75) // the rest of memory for TileDB library
     """
+    DBNAME=${dbname}
     gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${mem}G" \
         GenotypeGVCFs -V gendb://${dbname} -O ${dbname}.vcf -R ${ref}
     """

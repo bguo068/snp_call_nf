@@ -22,13 +22,18 @@ On Rosalind, the reference file can be linked by running
 ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/
 ```
 
-4. Run the pipeline
+5. Run the pipeline
     - Test it on HPC (local): `nextflow main.nf --gatk_tmpdir /path/to/your/tmpdir`
         - NOTE: there seems to have permission issues of the /tmp folder on Rosalind which 
         cause errors for some gatk commands. You can make your own folder outside of /tmp 
         folder or its subfolders and specifiy with the `gatk_tmpdir` option on the nextflow
         command.
     - Test it on SGE server: `nextflow main.nf -profile sge`
+
+6. Split chromosomes to better parallelize joint call:
+    - by default, the genome is split by chromosomes
+    - you can specify cmd line option `--split intervals` to split the chromosome into more 
+    intervals.
 
 # Important files
 

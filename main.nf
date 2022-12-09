@@ -420,7 +420,7 @@ workflow {
         | first
 
     // Import gvcf files to genomicsdb
-    interval_ch = channel.fromList(params.genome_intervals)
+    interval_ch = channel.fromList(params.genome_intervals[params.split])
     GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch) 
 
     // Genotype gvcf genomics db

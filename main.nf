@@ -17,18 +17,22 @@ tmpdir:\t${params.gatk_tmpdir}
 
 process BOWTIE2_ALIGN_TO_HOST {
     tag "$meta.Sample~$meta.Run"
+    publishDir "$params.outdir/flagstat_host", pattern: "*.flagstat"
     input:
     tuple val(meta), path(fastq)
     output:
-    tuple val(meta), path("*.bam")
+    tuple val(meta), path("*.bam"),      emit: bam
+    tuple val(meta), path("*.flagstat"), emit: flagstat
     shell:
     def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U $fastq"
     """
     bowtie2 -x $meta.Host_ref_prefix  $reads | \
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_host.bam
+    samtools flagstat ${meta.Sample}~${meta.Run}~to_host.bam \
+        > ${meta.Sample}~${meta.Run}~to_host.bam.flagstat
     """
     stub:
-    """ touch ${meta.Sample}~${meta.Run}~to_host.bam """
+    """ touch ${meta.Sample}~${meta.Run}~to_host.bam{,.flagstat} """
 }
 
 process SAMTOOLS_VIEW_RM_HOST_READS {
@@ -71,20 +75,24 @@ process SAMTOOLS_FASTQ {
 
 process BOWTIE2_ALIGN_TO_PARASITE {
     tag "$meta.Sample~$meta.Run"
+    publishDir "$params.outdir/flagstat_parasite", pattern: "*.flagstat"
     input:
     tuple val(meta), path(fastq)
     val (parasite_ref_prefix)
     output:
-    tuple val(meta), path("*.bam")
+    tuple val(meta), path("*.bam"),       emit: bam
+    tuple val(meta), path("*.flagstat"),  emit: flagstat
     shell:
     def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U $fastq"
     def read_group = "--rg-id ${meta.Sample} --rg SM:${meta.Sample} --rg PL:Illumina"
     """
     bowtie2 -x $parasite_ref_prefix $reads $read_group | \
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_parasite.bam
+    samtools flagstat ${meta.Sample}~${meta.Run}~to_parasite.bam \
+        > ${meta.Sample}~${meta.Run}~to_parasite.bam.flagstat
     """
     stub:
-    """ touch ${meta.Sample}~${meta.Run}~to_parasite.bam """
+    """ touch ${meta.Sample}~${meta.Run}~to_parasite.bam{,.flagstat} """
 }
 
 process PICARD_MERGE_SORT_BAMS{
@@ -405,7 +413,8 @@ workflow {
         } 
 
     // Remove reads mapped to host and split unmapped to fastq files
-    input_ch |  BOWTIE2_ALIGN_TO_HOST  | SAMTOOLS_VIEW_RM_HOST_READS | SAMTOOLS_FASTQ
+    input_ch |  BOWTIE2_ALIGN_TO_HOST
+    BOWTIE2_ALIGN_TO_HOST.out.bam  | SAMTOOLS_VIEW_RM_HOST_READS | SAMTOOLS_FASTQ
 
     // Align to parasite genome
     BOWTIE2_ALIGN_TO_PARASITE( SAMTOOLS_FASTQ.out, paths.parasite.fasta_prefix) 
@@ -415,7 +424,7 @@ workflow {
         | map {sample, host_id, run, mate_id, fq -> [sample, run]} \
         | unique | groupTuple | map {sample, runs -> [sample, runs.size()]} 
 
-    merge_input = BOWTIE2_ALIGN_TO_PARASITE.out \
+    merge_input = BOWTIE2_ALIGN_TO_PARASITE.out.bam \
         | map {meta, bam->[meta.Sample, bam]} \
         | combine(n_run, by: 0) \
         | map {sample, bam, sz -> [groupKey(sample, sz), bam] } \

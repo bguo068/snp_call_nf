@@ -195,13 +195,52 @@ process BEDTOOLS_GENOMECOV {
     val(ref)
     output:
     path("*recalibrated.coverage.BedGraph.gz")
+    path("*.coverage.summary.txt")
     shell:
     """
     bedtools genomecov -bg -ibam $bam -g ${ref} | \
         gzip -v > ${sample}_recalibrated.coverage.BedGraph.gz
+
+    # summarize the coverage
+    zcat ${sample}_recalibrated.coverage.BedGraph.gz | \
+        awk -v chrom_reg="${params.chrom_reg}" \
+            -v genome_size_bp=${params.genome_size_bp} \
+            -v sample="${sample}" \
+        '  BEGIN {
+                # exit in begin block wont affect the end block; need call exit again in end block
+                if(chrom_reg == "" || genome_size_bp == "" ||  sample == "") {exit 1;}
+
+                cov5x=0; cov10x=0; cov25x=0; cov50x=0; cov100x=0; area = 0; lines_used = 0;
+            }
+            NF == 4 && \$1 ~ chrom_reg {
+                L = \$3 - \$2;
+                d = \$4;
+                if (d >=   5) {cov5x   += L; }
+                if (d >=  10) {cov10x  += L; }
+                if (d >=  25) {cov25x  += L; }
+                if (d >=  50) {cov50x  += L; }
+                if (d >= 100) {cov100x += L; }
+                area += L * d;
+                lines_used += 1;
+            }
+            END {
+                # exit in begin block wont affect the end block; need call exit again in end block
+                if(chrom_reg == "" || genome_size_bp == "" ||  sample == "") {print "input variables are not set"; exit 1;}
+                avg_depth = area / genome_size_bp
+                OFS = ","
+                # print header
+                print "#sample", "cov5x", "cov10x", "cov25x", "cov50x", "cov100x", "area", "genome_size_bp", "avg_depth", "lines_used", "lines_total"
+                # print values
+                print sample, cov5x, cov10x, cov25x, cov50x, cov100x, area, genome_size_bp, avg_depth, lines_used, NR
+            } ' \
+        >  ${sample}_recalibrated.coverage.summary.txt
+
     """
     stub:
-    """ touch ${sample}_recalibrated.coverage.BedGraph.gz """
+    """ 
+    touch ${sample}_recalibrated.coverage.BedGraph.gz 
+    touch ${sample}_recalibrated.coverage.summary.txt
+    """
 }
 
 process SAMTOOLS_FLAGSTAT {

@@ -194,14 +194,14 @@ process BEDTOOLS_GENOMECOV {
     tuple val(sample), path(bam)
     val(ref)
     output:
-    path("*recalibrated.coverage.gz")
+    path("*recalibrated.coverage.BedGraph.gz")
     shell:
     """
-    bedtools genomecov -d -ibam $bam -g ${ref} | \
-        gzip -v > ${sample}_recalibrated.coverage.gz
+    bedtools genomecov -bg -ibam $bam -g ${ref} | \
+        gzip -v > ${sample}_recalibrated.coverage.BedGraph.gz
     """
     stub:
-    """ touch ${sample}_recalibrated.coverage.gz """
+    """ touch ${sample}_recalibrated.coverage.BedGraph.gz """
 }
 
 process SAMTOOLS_FLAGSTAT {

@@ -1,12 +1,19 @@
 # How to run the pipeline?
 
 1. Install conda from [here](https://docs.conda.io/en/latest/miniconda.html)
-2. Use conda to install nextflow:
+2. Install nextflow and the `snp_call_nf` conda environments:
+```sh
+# install nextflow
+cd $HOME
+wget -qO- https://get.nextflow.io | bash
+chmod u+x nextflow
+# install snp_call_nf
+conda env create -f environment.yaml
 ```
-conda install -c bioconda nextflow
-```
-3. Git clone the pipeline and change directory to the pipeline folder
-```
+3. Change to a working folder that is large enough to store the snp call result
+files. Git clone the pipeline and change directory to the pipeline folder
+```sh
+cd YOUR_WORKING_DIR # replace `YOUR_WORKING_DIR` with your real path
 git clone git@github.com:gbinux/snp_call_nf.git
 cd snp_call_nf
 ```
@@ -23,16 +30,17 @@ ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/
 ```
 
 - Prepare ref file by yourself:
-```
-conda create env -f environment.yaml
-conda activate snp_call_nf
+```sh
 cd ref
+conda activate snp_call_nf
 python3 prep_ref_files.py
+conda deactivate
+cd ..
 ```
 
 5. Run the pipeline
-    - Test it on HPC (local): `nextflow main.nf`
-    - Test it on SGE server: `nextflow main.nf -profile sge`
+    - Test it on HPC (local): `~/nextflow main.nf`
+    - Test it on SGE server: `~/nextflow main.nf -profile sge`
 
 6. Split chromosomes to better parallelize joint call:
     - by default, the genome is split by chromosomes

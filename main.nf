@@ -10,6 +10,7 @@ split:\t${params.split}
 filtering:
 \thard:\t ${params.hard}
 \tvqsr:\t ${params.vqsr}
+coverage_only:\t ${params.coverage_only}
 outdir:\t${params.outdir}
 tmpdir:\t${params.gatk_tmpdir}
 =============================================================""")
@@ -450,8 +451,16 @@ workflow {
     BEDTOOLS_GENOMECOV(GATK_APPLY_BQSR.out, paths.parasite.fasta)
     SAMTOOLS_FLAGSTAT(GATK_APPLY_BQSR.out)
 
+    // stop before GATK_HAPLOTYPE_CALLER if only coverage inforation is need
+    if (params.coverage_only) {
+        ch_bqsr_bam = Channel.empty()
+    }
+    else {
+        ch_bqsr_bam = GATK_APPLY_BQSR.out
+    }
+
     // Generate gvcf
-    GATK_HAPLOTYPE_CALLER(GATK_APPLY_BQSR.out, paths.parasite.fasta)
+    GATK_HAPLOTYPE_CALLER(ch_bqsr_bam, paths.parasite.fasta)
 
     // Collect information to make gvcf_map file
     gvcf_map_ch = GATK_HAPLOTYPE_CALLER.out \

@@ -18,11 +18,13 @@ tmpdir:\t${params.gatk_tmpdir}
 process BOWTIE2_ALIGN_TO_HOST {
     tag "$meta.Sample~$meta.Run"
     publishDir "$params.outdir/flagstat_host", pattern: "*.flagstat"
+    publishDir "$params.outdir/read_length",   pattern: "*_read_length.txt"
     input:
     tuple val(meta), path(fastq)
     output:
-    tuple val(meta), path("*.bam"),      emit: bam
-    tuple val(meta), path("*.flagstat"), emit: flagstat
+    tuple val(meta), path("*.bam"),             emit: bam
+    tuple val(meta), path("*.flagstat"),        emit: flagstat
+    tuple val(meta), path("*_read_length.txt"), emit: read_length
     shell:
     def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U $fastq"
     """
@@ -30,9 +32,16 @@ process BOWTIE2_ALIGN_TO_HOST {
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_host.bam
     samtools flagstat ${meta.Sample}~${meta.Run}~to_host.bam \
         > ${meta.Sample}~${meta.Run}~to_host.bam.flagstat
+    samtools view ${meta.Sample}~${meta.Run}~to_host.bam | \
+        head -100000 | awk '{a+=length(\$10)}END{print (a/NR)}' \
+        > ${meta.Sample}~${meta.Run}_read_length.txt
+
     """
     stub:
-    """ touch ${meta.Sample}~${meta.Run}~to_host.bam{,.flagstat} """
+    """ 
+    touch ${meta.Sample}~${meta.Run}~to_host.bam{,.flagstat}
+    touch ${meta.Sample}~${meta.Run}_read_length.txt
+    """
 }
 
 process SAMTOOLS_VIEW_RM_HOST_READS {

@@ -5,6 +5,7 @@ nextflow.enable.dsl = 2
 def print_parameters() {
     println("""======================== PARAMETERS ==========================
 fq_map:\t${file(params.fq_map)}
+known_variants:\t${params.known_sites}
 split:\t${params.split}
 filtering:
 \thard:\t ${params.hard}
@@ -384,7 +385,7 @@ workflow {
     // prepare tmpdir for gatk
     def tmpdir = file(params.gatk_tmpdir)
     if (!tmpdir.exists()) {
-        file.mkdirs()
+        tmpdir.mkdirs()
     }
 
     // Prepare input chanel

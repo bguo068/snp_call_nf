@@ -9,3 +9,4 @@ dependencies:
   - bedtools=2.30.0
   - samtools=1.13
   - bcftools=1.13
+  - requests # for downloading files

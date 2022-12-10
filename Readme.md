@@ -10,16 +10,24 @@ conda install -c bioconda nextflow
 git clone git@github.com:gbinux/snp_call_nf.git
 cd snp_call_nf
 ```
-4. Link the reference folder.
+4. Link the reference files or prepare them by yourself
 
-On IGS server
+- Link the ref files on IGS server
 ```
 ln -s /local/projects-t3/toconnor_grp/bing.guo/ref/* ref/
 ```
 
-On Rosalind, the reference file can be linked by running
+- Link the ref files on Rosalind, the reference file can be linked by running
 ```
 ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/
+```
+
+- Prepare ref file by yourself:
+```
+conda create env -f environment.yaml
+conda activate snp_call_nf
+cd ref
+python3 prep_ref_files.py
 ```
 
 5. Run the pipeline

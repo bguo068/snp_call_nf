@@ -6,3 +6,5 @@
 /result*
 /tmpdir
 .DS_Store
+ena_data/*
+!ena_data/download_ena_data.sh

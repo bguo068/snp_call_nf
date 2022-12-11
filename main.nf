@@ -451,6 +451,8 @@ workflow {
         | groupTuple (by: [0, 1, 2], sort: true) \
         | map {
             sample, host_id, run, mate_id, fq ->
+            assert (fq.size() == 1) || (fq.size() == 2): \
+                "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
             def meta = [:]
             meta.Sample = sample
             meta.Run = run

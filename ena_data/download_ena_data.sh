@@ -23,7 +23,6 @@ fi
 #                                       ERR036596	        PR0001-CW	SAS	    89.62	True
 #                                       ERR015419	        PH0057-C	ESEA	88.91	True 
 #                                       ERR019041	        PD0009-01	WSEA	77.01	True
-#                                       ERR662601	        PJ0157-Cx	OCE	    77.54   True
 #                                       ERR022856	        PP0010-C	SAM	    88.92	True
 #                                       ERR018922	        PP0006-C	Lab	    87.87	False	Suspected_lab_strain
 # MalariaGen Pf6 meta: 
@@ -32,4 +31,4 @@ fi
 
 java -jar ena-file-downloader.jar --format=READS_FASTQ --protocol=FTP --asperaLocation=null \
     --location=$PWD \
-    --accessions=ERR1099208,ERR018904,ERR015361,ERR676507,ERR404155,ERR1172588,ERR036596,ERR015419,ERR019041,ERR662601,ERR022856,ERR018922
+    --accessions=ERR1099208,ERR018904,ERR015361,ERR676507,ERR404155,ERR1172588,ERR036596,ERR015419,ERR019041,ERR022856,ERR018922

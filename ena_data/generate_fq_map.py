@@ -1,17 +1,16 @@
 import pandas as pd
 
 info = """
-ERR1099208	        FP0026-C	WAF	    0.45	False
-ERR018904,ERR015361	PA0035-C	WAF	    89.9	True
-ERR676507	        PE0309-C	EAF	    89.87	True
-ERR404155	        QG0016-C	CAF	    88.65	True
-ERR1172588	        QJ0006-C	WAF	    89.43	True
-ERR036596	        PR0001-CW	SAS	    89.62	True
-ERR015419	        PH0057-C	ESEA	88.91	True 
-ERR019041	        PD0009-01	WSEA	77.01	True
-ERR662601	        PJ0157-Cx	OCE	    77.54   True
-ERR022856	        PP0010-C	SAM	    88.92	True
-ERR018922	        PP0006-C	Lab	    87.87	False
+ERR1099208           FP0026-C    WAF        0.45     False
+ERR018904,ERR015361  PA0035-C    WAF        89.9     True
+ERR676507            PE0309-C    EAF        89.87    True
+ERR404155            QG0016-C    CAF        88.65    True
+ERR1172588           QJ0006-C    WAF        89.43    True
+ERR036596            PR0001-CW   SAS        89.62    True
+ERR015419            PH0057-C    ESEA       88.91    True 
+ERR019041            PD0009-01   WSEA       77.01    True
+ERR022856            PP0010-C    SAM        88.92    True
+ERR018922            PP0006-C    Lab        87.87    False
 """
 res = {
     "Sample": [],

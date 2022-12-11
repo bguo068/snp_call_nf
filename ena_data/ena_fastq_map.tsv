@@ -17,8 +17,6 @@ PH0057-C	0	R1	1	ena_data/reads_fastq/ERR015419/ERR015419_1.fastq.gz
 PH0057-C	0	R1	2	ena_data/reads_fastq/ERR015419/ERR015419_2.fastq.gz
 PD0009-01	0	R1	1	ena_data/reads_fastq/ERR019041/ERR019041_1.fastq.gz
 PD0009-01	0	R1	2	ena_data/reads_fastq/ERR019041/ERR019041_2.fastq.gz
-PJ0157-Cx	0	R1	1	ena_data/reads_fastq/ERR662601/ERR662601_1.fastq.gz
-PJ0157-Cx	0	R1	2	ena_data/reads_fastq/ERR662601/ERR662601_2.fastq.gz
 PP0010-C	0	R1	1	ena_data/reads_fastq/ERR022856/ERR022856_1.fastq.gz
 PP0010-C	0	R1	2	ena_data/reads_fastq/ERR022856/ERR022856_2.fastq.gz
 PP0006-C	0	R1	1	ena_data/reads_fastq/ERR018922/ERR018922_1.fastq.gz

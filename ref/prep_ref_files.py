@@ -114,6 +114,20 @@ def download_pf_crosses_v1_vcfs():
                 ftp_server.retrbinary("RETR " + remote_filename, file.write)
     ftp_server.quit()
 
+    # index vcf file with
+    for local_fn in local_filename_lst:
+        idx_fn = local_fn + ".tbi"
+        if not Path(idx_fn).exists():
+            cmd = f"gatk IndexFeatureFile -I {local_fn}"
+            res = run(cmd, shell=True, capture_output=True, text=True)
+            if (
+                res.returncode != 0
+                or "error" in res.stderr.lower()
+                or "error" in res.stdout.lower()
+            ):
+                print(res.stderr)
+                exit(-1)
+
 
 def known_variants_from_pf_crosses_v1():
     local_filename_lst = URLS.pf_crosses_v1["orig_files"]
@@ -163,9 +177,9 @@ if __name__ == "__main__":
     index_fasta_files()
     print("Done indexing")
 
-    print("download pf crosses v1.0 vcf files")
+    print("download and index pf crosses v1.0 vcf files")
     download_pf_crosses_v1_vcfs()
-    print("Done download pf crosses 1.0")
+    print("Done download/index pf crosses 1.0")
 
     print("generating known variants vcf from pf crosses 1.0")
     known_variants_from_pf_crosses_v1()

@@ -506,7 +506,7 @@ workflow {
     // Collect information to make gvcf_map file
     gvcf_map_ch = GATK_HAPLOTYPE_CALLER.out \
         | map{sample, gvcf, idx -> "$sample\t$gvcf"} \
-        | collectFile(name: "gvcf_map.txt", newLine: true) 
+        | collectFile(name: "gvcf_map.txt", newLine: true, sort: true) // sort by nautral ordering instead of hash on content
         | first
 
     // Import gvcf files to genomicsdb

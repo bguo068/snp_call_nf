@@ -1,4 +1,5 @@
-import pandas as pd
+#! /usr/bin/env python3
+from pathlib import Path
 
 info = """
 ERR1099208           FP0026-C    WAF        0.45     False
@@ -12,24 +13,17 @@ ERR019041            PD0009-01   WSEA       77.01    True
 ERR022856            PP0010-C    SAM        88.92    True
 ERR018922            PP0006-C    Lab        87.87    False
 """
-res = {
-    "Sample": [],
-    "Host_id": [],
-    "Run": [],
-    "Mate_id": [],
-    "Fastq": [],
-}
 
+header = ["Sample", "HostId", "MateId", "Run", "Fastq"]
+print("\t".join(header))
 for line in info.strip().split("\n"):
     acc, sample, _, _, _ = line.split()
     acc_lst = acc.split(",")
     for i, acc in enumerate(acc_lst):
         for mate in [1, 2]:
-            res["Sample"].append(sample)
-            res["Host_id"].append(0)
-            res["Mate_id"].append(mate)
-            res["Run"].append(f"R{i+1}")
-            path = f"ena_data/reads_fastq/{acc}/{acc}_{mate}.fastq.gz"
-            res["Fastq"].append(path)
-
-pd.DataFrame(res).to_csv("ena_fastq_map.tsv", sep="\t", index=None)
+            hostid = 0
+            mateid = mate
+            run = f"R{i+1}"
+            dir = Path(__file__).parent.absolute()
+            path = dir / (f"reads_fastq/{acc}/{acc}_{mate}.fastq.gz")
+            print(f"{sample}\t{hostid}\t{mateid}\t{run}\t{path}")

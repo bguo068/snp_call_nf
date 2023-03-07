@@ -8,3 +8,4 @@
 .DS_Store
 ena_data/*
 !ena_data/download_ena_data.sh
+/ref/jacob2014_chip_sites.vcf.idx

@@ -1,14 +1,12 @@
 # How to run the pipeline?
 
 1. Install conda from [here](https://docs.conda.io/en/latest/miniconda.html)
-2. Install nextflow and the `snp_call_nf` conda environments:
+2. Install the `nf` and the `snp_call_nf` conda environments:
 ```sh
 # install nextflow
-cd $HOME
-wget -qO- https://get.nextflow.io | bash
-chmod u+x nextflow
+conda env create -f env/nf.ymal
 # install snp_call_nf
-conda env create -f environment.yaml
+conda env create -f env/snp_call_nf.yaml
 ```
 3. Change to a working folder that is large enough to store the snp call result
 files. Git clone the pipeline and change directory to the pipeline folder

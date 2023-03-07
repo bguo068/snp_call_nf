@@ -1,0 +1,7 @@
+name: nf
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - nextflow=22.10.6

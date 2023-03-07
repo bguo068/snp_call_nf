@@ -1,4 +1,4 @@
-Sample	Host_id	Run	Mate_id	Fastq
+Sample	HostId	Run	MateId	Fastq
 FP0026-C	0	R1	1	ena_data/reads_fastq/ERR1099208/ERR1099208_1.fastq.gz
 FP0026-C	0	R1	2	ena_data/reads_fastq/ERR1099208/ERR1099208_2.fastq.gz
 PA0035-C	0	R1	1	ena_data/reads_fastq/ERR018904/ERR018904_1.fastq.gz

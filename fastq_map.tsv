@@ -1,4 +1,4 @@
-Sample	Host_id	Run	Mate_id	Fastq
+Sample	HostId	Run	MateId	Fastq
 ASAP001	0	r1	1	test_data/fastq/ASAP001_1.fastq.gz
 ASAP001	0	r1	2	test_data/fastq/ASAP001_2.fastq.gz
 ASAP002	0	r1	1	test_data/fastq/ASAP002_1.fastq.gz

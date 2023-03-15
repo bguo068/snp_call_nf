@@ -30,7 +30,7 @@ process BOWTIE2_ALIGN_TO_HOST {
     shell:
     def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U $fastq"
     """
-    bowtie2 -x $meta.Host_ref_prefix  $reads | \
+    bowtie2 -x $meta.Host_ref_prefix  $reads -p $task.cpus | \
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_host.bam
     samtools flagstat ${meta.Sample}~${meta.Run}~to_host.bam \
         > ${meta.Sample}~${meta.Run}~to_host.bam.flagstat
@@ -56,7 +56,7 @@ process SAMTOOLS_VIEW_RM_HOST_READS {
     def flag = meta.is_paired ? "-f 12 -F 256" : "-f 4"
     """
     samtools view -b $flag $bam | \
-        samtools sort -n -o ${meta.Sample}~${meta.Run}~unmapped_sorted.bam
+        samtools sort -@ $task.cpus -n -o ${meta.Sample}~${meta.Run}~unmapped_sorted.bam
     """
     stub:
     """ touch ${meta.Sample}~${meta.Run}~unmapped_sorted.bam """
@@ -97,7 +97,7 @@ process BOWTIE2_ALIGN_TO_PARASITE {
     def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U $fastq"
     def read_group = "--rg-id ${meta.Sample} --rg SM:${meta.Sample} --rg PL:Illumina"
     """
-    bowtie2 -x $parasite_ref_prefix $reads $read_group | \
+    bowtie2 -x $parasite_ref_prefix $reads $read_group -p $task.cpus | \
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_parasite.bam
     samtools flagstat ${meta.Sample}~${meta.Run}~to_parasite.bam \
         > ${meta.Sample}~${meta.Run}~to_parasite.bam.flagstat

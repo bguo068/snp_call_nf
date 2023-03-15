@@ -13,6 +13,7 @@ filtering:
 coverage_only:\t ${params.coverage_only}
 outdir:\t${params.outdir}
 tmpdir:\t${params.gatk_tmpdir}
+gvcf_only:\t${params.gvcf_only}
 =============================================================""")
 }
 
@@ -503,38 +504,41 @@ workflow {
     // Generate gvcf
     GATK_HAPLOTYPE_CALLER(ch_bqsr_bam, paths.parasite.fasta)
 
-    // Collect information to make gvcf_map file
-    gvcf_map_ch = GATK_HAPLOTYPE_CALLER.out \
-        | map{sample, gvcf, idx -> "$sample\t$gvcf"} \
-        | collectFile(name: "gvcf_map.txt", newLine: true, sort: true) // sort by nautral ordering instead of hash on content
-        | first
+    if (!params.gvcf_only)
+    {
+        // Collect information to make gvcf_map file
+        gvcf_map_ch = GATK_HAPLOTYPE_CALLER.out \
+            | map{sample, gvcf, idx -> "$sample\t$gvcf"} \
+            | collectFile(name: "gvcf_map.txt", newLine: true, sort: true) // sort by nautral ordering instead of hash on content
+            | first
 
-    // Import gvcf files to genomicsdb
-    interval_ch = channel.fromList(params.genome_intervals[params.split])
-    GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch) 
+        // Import gvcf files to genomicsdb
+        interval_ch = channel.fromList(params.genome_intervals[params.split])
+        GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch) 
 
-    // Genotype gvcf genomics db
-    GATK_GENOTYPE_GVCFS(GATK_GENOMICS_DB_IMPORT.out, paths.parasite.fasta) 
+        // Genotype gvcf genomics db
+        GATK_GENOTYPE_GVCFS(GATK_GENOMICS_DB_IMPORT.out, paths.parasite.fasta) 
 
-    // Select SNP only
-    GATK_SELECT_VARIANTS(GATK_GENOTYPE_GVCFS.out, paths.parasite.fasta) 
+        // Select SNP only
+        GATK_SELECT_VARIANTS(GATK_GENOTYPE_GVCFS.out, paths.parasite.fasta) 
 
-    // Hard filtering and Keep 'PASS' variants
-    if (params.hard == true) {
-        GATK_VARIANT_FILTRATION(GATK_SELECT_VARIANTS.out, paths.parasite.fasta) 
-    }
+        // Hard filtering and Keep 'PASS' variants
+        if (params.hard == true) {
+            GATK_VARIANT_FILTRATION(GATK_SELECT_VARIANTS.out, paths.parasite.fasta) 
+        }
 
-    // VQSR variant filtering
-    if (params.vqsr == true) {
-        GATK_VARIANT_RECALIBRATOR( 
-            GATK_SELECT_VARIANTS.out, 
-            params.vqsr_resources, 
-            params.vqsr_opts, 
-            params.vqsr_mode, 
-            paths.parasite.fasta)
-        GATK_APPLY_VQSR(
-            GATK_SELECT_VARIANTS.out.combine(GATK_VARIANT_RECALIBRATOR.out, by: 0),
-            params.vqsr_mode, 
-            paths.parasite.fasta)
+        // VQSR variant filtering
+        if (params.vqsr == true) {
+            GATK_VARIANT_RECALIBRATOR( 
+                GATK_SELECT_VARIANTS.out, 
+                params.vqsr_resources, 
+                params.vqsr_opts, 
+                params.vqsr_mode, 
+                paths.parasite.fasta)
+            GATK_APPLY_VQSR(
+                GATK_SELECT_VARIANTS.out.combine(GATK_VARIANT_RECALIBRATOR.out, by: 0),
+                params.vqsr_mode, 
+                paths.parasite.fasta)
+        }
     }
 }

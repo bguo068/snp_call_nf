@@ -37,8 +37,8 @@ cd ..
 ```
 
 5. Run the pipeline
-    - Test it on HPC (local): `~/nextflow main.nf`
-    - Test it on SGE server: `~/nextflow main.nf -profile sge`
+    - Test it on HPC (local): `conda activate snp_call_nf; nextflow main.nf`
+    - Test it on SGE server: `conda activate snp_call_nf; nextflow main.nf -profile sge`
 
 6. Split chromosomes to better parallelize joint call:
     - by default, the genome is split by chromosomes
@@ -49,8 +49,8 @@ cd ..
 
 1. Main input file is `./fastq_map.tsv`
     - Five columns: string, interger, string, interger, string
-    - `Host_id` is the index of host genomes from 0, see `params.host` in nextflow.config file
-    - `Mate_id` can be 0 for single-end sequencing, or 1 and 2 for pair-end sequencing
+    - `HostId` is the index of host genomes from 0, see `params.host` in nextflow.config file
+    - `MateId` can be 0 for single-end sequencing, or 1 and 2 for pair-end sequencing
 2. Main configureation file is `./nextflow.config`
     - Be sure to edit sge config about `clusterOptions = "-P toconnor-lab -cwd -V"` to reflect your lab specifc sge qsub option
 3. Main pipeline script is `./main.nf`

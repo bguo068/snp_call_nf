@@ -23,7 +23,13 @@ files for *Plasmodium vivax* under development and can be checked with the
 [link](https://github.com/bguo068/snp_call_nf/tree/vivax).
 
 
-# How to run the pipeline?
+# Software environtment
+
+The pipeline has been tested on MacOS and Linux system. The software
+dependencies (including the version numbers of used software) are defined within the
+`env/nf.yaml` Conda recipe (for Nextflow engine) and the `env/snp_call_nf.yaml`
+Conda recipe (for the pipeline itself). Installtion instruction is listed below.
+The estimated time of instation is about 5-20 minutes.
 
 1. Change to a working folder that is large enough to store the snp call result
 files. Git clone the pipeline and change directory to the pipeline folder
@@ -42,7 +48,9 @@ conda env create -f env/nf.ymal
 # install snp_call_nf
 conda env create -f env/snp_call_nf.yaml
 ```
-4. Link the reference files (internal users) or prepare them by yourself
+# How to run the pipeline?
+
+1. Link the reference files (internal users) or prepare them by yourself
 (**external** users)
 - Link the ref files on IGS server
 ```
@@ -62,24 +70,33 @@ conda deactivate
 cd ..
 ```
 
-5. Run the pipeline
+2. Run the pipeline
     - Test it on HPC (local): `conda activate nf; nextflow main.nf`
+        - This will use a tiny **test dataset** from `test_data` folder
+        - To test on a larger **test data**, please run `cd ena_data;
+        ena_data/download_ena_data.sh` (it may take hours to download all the
+        real data from ENA). Once downloaded, change directory to project folder
+        (where `main.nf` is located) by run `cd ..`, and the pipeline can be run
+        with `conda activate nf; nextflow main.nf --fq_map
+        ena_data/ena_fastq_map.tsv`
     - Test it on SGE server: `conda activate nf; nextflow main.nf -profile sge`
-    - You will need to edit `fastq_map.tsv` file to include your own samples.
+        - This will use a small dataset from `test_data` folder
+    - You will need to edit `fastq_map.tsv` file to include the raw
+    reads(`fastq.gz` files) of your own samples.
 
 ## Optional arguments
-6. Split chromosomes to better parallelize joint call:
+3. Split chromosomes to better parallelize joint call:
     - by default, the genome is split by chromosomes
     - you can specify cmd line option `--split intervals` to split the chromosome into more 
     intervals.
 
-7. Enable `vqsr` variant filtering. By default, `vqsr` is not enabled. To enable, you
-can specify `--vqsr true` to the nextflow command line
+4. Enable `vqsr` variant filtering. By default, `vqsr` is not enabled. To enable
+this option, you can specify `--vqsr true` to the nextflow command line
 
-# Important files
+# Important input and output files
 
 1. Main input file is `./fastq_map.tsv`
-    - Five columns: string, interger, string, interger, string
+    - Five columns delimited by tab: string, interger, string, interger, string
     - `HostId` is the index of host genomes from 0, see `params.host` in nextflow.config file
     - `MateId` can be 0 for single-end sequencing, or 1 and 2 for pair-end sequencing
 2. Main configureation file is `./nextflow.config`

@@ -1,3 +1,28 @@
+# snp_call_nf 
+
+The pipeline is designed to perform joint variant calling on large Plasmodium
+Whole Genome Sequencing (WGS) datasets. It follows `GATK` best practices and the
+[MalariaGEN Pf6 data-generating
+methods]((https://ngs.sanger.ac.uk//production/malaria/pfcommunityproject/Pf6/Pf_6_extended_methods.pdf)).
+Briefly, raw reads are first mapped to the human GRCh38 reference genome to
+remove host reads, with the remaining reads being mapped to the Pf3D7 reference
+genome (PlasmoDB_44). The mapped reads are then processed using `GATK`'s
+`MarkDuplicates` and `BaseRecalibrator` tools. Following this, analysis-ready
+mapped reads for each isolate are used to generate per-sample calls
+(`HaplotypeCaller` /GVCF mode). These per-sample calls are combined and run
+through a joint-call step (`GenotypeGVCFs`) to obtain unfiltered multi-sample
+VCFs. A machine learning-based variant filtration strategy (VQSR via `GATK`'s
+`VariantRecalibrator`), or/and hard-filteration strategy, can then be used to
+retain high-quality variants.
+
+The `main` branch of the repository is employed for *Plasmodium falciparum*.
+However, the pipeline is expected to work with other *Plasmodium* species,
+provided the corresponding configuration and reference files are given (See
+nextflow.config). A separate `vivax` branch with configuration and reference
+files for *Plasmodium vivax* under development and can be checked with the
+[link](https://github.com/bguo068/snp_call_nf/tree/vivax).
+
+
 # How to run the pipeline?
 
 1. Change to a working folder that is large enough to store the snp call result
@@ -69,8 +94,18 @@ can specify `--vqsr true` to the nextflow command line
     - `result/flagstat`: bam flatstat based on the analysis-ready bam files 
     - `result/gvcf`: single-sample vcf files
     - `result/hardfilt`: multiple-sample (joint-call) vcf files with hard filterating annotations
-    - `result/vqsrfilt`: multiple-sample (joint-call) vcf files with vqsr-based filterating annotations. You can decide to use one of these, `result/hardfilt` and `result/vqsrfilt`.
+    - `result/vqsrfilt`: multiple-sample (joint-call) vcf files with vqsr-based filterating annotations.
+   You can decide to use one of these, `result/hardfilt` and `result/vqsrfilt`.
 
 # Workflow chart
 
 ![flowchar](./flowchart.png)
+
+# Citations
+This pipeline was originally developed for the `posseleff` project. 
+If you find this pipeline useful, please consider citing our preprint:
+> Guo, B., Borda, V., Laboulaye, R., Spring, M. D., Wojnarski, M., Vesely, B. A., Silva, J. C.,
+> Waters, N. C., O'Connor, T. D., & Takala-Harrison, S. (2023). Strong Positive Selection Biases
+> Identity-By-Descent-Based Inferences of Recent Demography and Population Structure in
+> Plasmodium falciparum. bioRxiv : the preprint server for biology, 2023.07.14.549114.
+> https://doi.org/10.1101/2023.07.14.549114

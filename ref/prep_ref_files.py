@@ -59,7 +59,7 @@ class URLS:
             Pv4_PvP01_12_v1.vcf.gz
             Pv4_PvP01_13_v1.vcf.gz
             Pv4_PvP01_14_v1.vcf.gz""".split(),
-         "orig_files": [
+        "orig_files": [
             "pv_malgen/Pv4_PvP01_01_v1.vcf.gz",
             "pv_malgen/Pv4_PvP01_02_v1.vcf.gz",
             "pv_malgen/Pv4_PvP01_03_v1.vcf.gz",
@@ -211,8 +211,11 @@ def known_variants_from_pf_crosses_v1():
     known_variants_vcf = URLS.pf_crosses_v1["known_variants_vcf"]
     cmd = (
         f"""
-        bcftools merge --force-samples {filt_filename_str}  -Ov -o {known_variants_vcf}
-        gatk IndexFeatureFile -I {known_variants_vcf}
+        bcftools merge --force-samples {filt_filename_str}  -Oz -o tmp.vcf.gz
+        # vcf with all samples is too large; make site-only vcf to reduce the size
+        gatk MakeSitesOnlyVcf -I tmp.vcf.gz -O {known_variants_vcf}
+        # gatk IndexFeatureFile -I {known_variants_vcf}
+        rm tmp.vcf.gz
         """,
     )
     res = run(cmd, shell=True, capture_output=True, text=True)
@@ -223,6 +226,7 @@ def known_variants_from_pf_crosses_v1():
     ):
         print(res.stderr)
         exit(-1)
+
 
 def download_pv_malgen_vcfs():
     # file names and folders
@@ -241,7 +245,7 @@ def download_pv_malgen_vcfs():
                 print("download " + remote_filename)
                 ftp_server.retrbinary("RETR " + remote_filename, file.write)
     ftp_server.quit()
-    
+
     # index vcf file with
     for local_fn in local_filename_lst:
         idx_fn = local_fn + ".tbi"
@@ -255,7 +259,8 @@ def download_pv_malgen_vcfs():
             ):
                 print(res.stderr)
                 exit(-1)
-                
+
+
 def known_variants_from_pv_malgen():
     local_filename_lst = URLS.pv_malgen["orig_files"]
     filt_filename_lst = URLS.pv_malgen["filt_files"]
@@ -280,8 +285,11 @@ def known_variants_from_pv_malgen():
     known_variants_vcf = URLS.pv_malgen["known_variants_vcf"]
     cmd = (
         f"""
-        bcftools concat {filt_filename_str}  -Ov -o {known_variants_vcf}
-        gatk IndexFeatureFile -I {known_variants_vcf}
+        bcftools concat {filt_filename_str}  -Oz -o tmp.vcf.gz
+        # vcf with all samples is too large; make site-only vcf to reduce the size
+        gatk MakeSitesOnlyVcf -I tmp.vcf.gz -O {known_variants_vcf}
+        # gatk IndexFeatureFile -I {known_variants_vcf}
+        rm tmp.vcf.gz
         """,
     )
     res = run(cmd, shell=True, capture_output=True, text=True)
@@ -295,7 +303,6 @@ def known_variants_from_pv_malgen():
 
 
 if __name__ == "__main__":
-
     print("downloading fasta files")
     download_genome_fasta_files()
     print("Done obtaining fasta files")
@@ -310,4 +317,12 @@ if __name__ == "__main__":
 
     print("generating known variants vcf from pf crosses 1.0")
     known_variants_from_pf_crosses_v1()
+    print("Done known variants vcf")
+
+    print("download and index pv malaria gen vcf files")
+    download_pv_malgen_vcfs()
+    print("Done download/index pv malaria gen vcf files")
+
+    print("generating known variants vcf from pv malaria gen file")
+    known_variants_from_pv_malgen()
     print("Done known variants vcf")

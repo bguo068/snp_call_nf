@@ -35,6 +35,58 @@ class URLS:
         ],
         "known_variants_vcf": "pf_crosses_v1/known_variants.vcf",
     }
+    pv_malgen = {
+        "server": "ngs.sanger.ac.uk",
+        "remotedir": "/production/malaria/Resource/30/Pv4_vcf",
+        "vcf_files": """
+            Pv4_PvP01_01_v1.vcf.gz
+            Pv4_PvP01_02_v1.vcf.gz
+            Pv4_PvP01_03_v1.vcf.gz 
+            Pv4_PvP01_04_v1.vcf.gz
+            Pv4_PvP01_05_v1.vcf.gz
+            Pv4_PvP01_06_v1.vcf.gz
+            Pv4_PvP01_07_v1.vcf.gz
+            Pv4_PvP01_08_v1.vcf.gz
+            Pv4_PvP01_09_v1.vcf.gz
+            Pv4_PvP01_10_v1.vcf.gz
+            Pv4_PvP01_11_v1.vcf.gz
+            Pv4_PvP01_12_v1.vcf.gz
+            Pv4_PvP01_13_v1.vcf.gz
+            Pv4_PvP01_14_v1.vcf.gz""".split(),
+         "orig_files": [
+            "pv_malgen/Pv4_PvP01_01_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_02_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_03_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_04_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_05_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_06_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_07_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_08_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_09_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_10_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_11_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_12_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_13_v1.vcf.gz",
+            "pv_malgen/Pv4_PvP01_14_v1.vcf.gz",
+        ],
+        "filt_files": [
+            "pv_malgen/Pv4_PvP01_01_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_02_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_03_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_04_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_05_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_06_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_07_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_08_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_09_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_10_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_11_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_12_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_13_v1.pass.vcf.gz",
+            "pv_malgen/Pv4_PvP01_14_v1.pass.vcf.gz",
+        ],
+        "known_variants_vcf": "pv_malgen/known_variants.vcf",
+    }
 
 
 def download_genome_fasta_files():
@@ -154,6 +206,75 @@ def known_variants_from_pf_crosses_v1():
     cmd = (
         f"""
         bcftools merge --force-samples {filt_filename_str}  -Ov -o {known_variants_vcf}
+        gatk IndexFeatureFile -I {known_variants_vcf}
+        """,
+    )
+    res = run(cmd, shell=True, capture_output=True, text=True)
+    if (
+        res.returncode != 0
+        or "error" in res.stderr.lower()
+        or "error" in res.stdout.lower()
+    ):
+        print(res.stderr)
+        exit(-1)
+
+def download_pv_malgen_vcfs():
+    # file names and folders
+    remote_filename_lst = URLS.pv_malgen["vcf_files"]
+    local_filename_lst = URLS.pv_malgen["orig_files"]
+    for fn in local_filename_lst:
+        Path(fn).parent.mkdir(parents=True, exist_ok=True)
+
+    # download vcfs
+    ftp_server = ftplib.FTP(URLS.pv_malgen["server"])
+    ftp_server.login()
+    ftp_server.cwd(URLS.pv_malgen["remotedir"])
+    for remote_filename, local_filename in zip(remote_filename_lst, local_filename_lst):
+        if not Path(local_filename).exists():
+            with open(local_filename, "wb") as file:
+                print("download " + remote_filename)
+                ftp_server.retrbinary("RETR " + remote_filename, file.write)
+    ftp_server.quit()
+    
+    # index vcf file with
+    for local_fn in local_filename_lst:
+        idx_fn = local_fn + ".tbi"
+        if not Path(idx_fn).exists():
+            cmd = f"gatk IndexFeatureFile -I {local_fn}"
+            res = run(cmd, shell=True, capture_output=True, text=True)
+            if (
+                res.returncode != 0
+                or "error" in res.stderr.lower()
+                or "error" in res.stdout.lower()
+            ):
+                print(res.stderr)
+                exit(-1)
+                
+def known_variants_from_pv_malgen():
+    local_filename_lst = URLS.pv_malgen["orig_files"]
+    filt_filename_lst = URLS.pv_malgen["filt_files"]
+
+    # keep pass only
+    for origf, passf in zip(local_filename_lst, filt_filename_lst):
+        print("filter " + origf)
+        res = run(
+            f"""
+            bcftools view -f PASS {origf} -Oz -o {passf}
+            bcftools index {passf}
+            """,
+            shell=True,
+            capture_output=True,
+            text=True,
+        )
+        assert res.returncode == 0
+
+    # merge vcfs and generate .idx file
+    print("merge filtered vcfs and generate.idx file")
+    filt_filename_str = " ".join(filt_filename_lst)
+    known_variants_vcf = URLS.pv_malgen["known_variants_vcf"]
+    cmd = (
+        f"""
+        bcftools concat {filt_filename_str}  -Ov -o {known_variants_vcf}
         gatk IndexFeatureFile -I {known_variants_vcf}
         """,
     )

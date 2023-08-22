@@ -1,0 +1,11 @@
+Sample	HostId	Run	MateId	Fastq
+Sample01	0	r1	1	test_data/pv/fastq/Sample01_1.fastq.gz
+Sample01	0	r1	2	test_data/pv/fastq/Sample01_2.fastq.gz
+Sample02	0	r1	1	test_data/pv/fastq/Sample02_1.fastq.gz
+Sample02	0	r1	2	test_data/pv/fastq/Sample02_2.fastq.gz
+Sample03	0	r1	1	test_data/pv/fastq/Sample03_1.fastq.gz
+Sample03	0	r1	2	test_data/pv/fastq/Sample03_2.fastq.gz
+Sample04	0	r1	1	test_data/pv/fastq/Sample01_1.fastq.gz
+Sample04	0	r1	2	test_data/pv/fastq/Sample01_2.fastq.gz
+Sample04	0	r2	1	test_data/pv/fastq/Sample02_1.fastq.gz
+Sample04	0	r2	2	test_data/pv/fastq/Sample02_2.fastq.gz

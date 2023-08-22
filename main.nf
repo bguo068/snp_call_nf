@@ -2,10 +2,31 @@
 
 nextflow.enable.dsl = 2
 
+// short cuts
+sp = params.sp
+
+//check split, 
+def check_parameters(){
+    def split = params.split
+    if (!params[pf].genome_intervals.containsKey(split)){
+        println("ERROR: --split ${split} not defined for ${sp}")
+        System.exit(-1)
+    }
+
+    def vqsr_resources = params[sp].vqsr_resources
+    if (params.vqsr){
+        if (!(vqsr_resources.size()>0 && vqsr_resources[0].containsKey('vcf'))){
+            println!("ERROR: --vqsr switch is ON but vqsr_resources is empty")
+        }
+    }
+}
+
 def print_parameters() {
+    //def sp = params.sp
     println("""======================== PARAMETERS ==========================
 fq_map:\t${file(params.fq_map)}
-known_variants:\t${params.known_sites}
+parasite_species:\t${sp}
+known_variants:\t${params[sp].known_sites}
 split:\t${params.split}
 filtering:
 \thard:\t ${params.hard}
@@ -204,8 +225,8 @@ process BEDTOOLS_GENOMECOV {
 
     # summarize the coverage
     zcat ${sample}_recalibrated.coverage.BedGraph.gz | \
-        awk -v chrom_reg="${params.chrom_reg}" \
-            -v genome_size_bp=${params.genome_size_bp} \
+        awk -v chrom_reg="${params[sp].chrom_reg}" \
+            -v genome_size_bp=${params[sp].genome_size_bp} \
             -v sample="${sample}" \
         '  BEGIN {
                 # exit in begin block wont affect the end block; need call exit again in end block
@@ -349,7 +370,7 @@ process GATK_VARIANT_FILTRATION {
     tuple val(dbname), path("*.snp.hardfilt.vcf"), path("*.snp.hardfilt.vcf.idx")
     shell:
     def filter_str = ''
-    params.hard_filters.each {filter_str+= " -filter \"${it.filter}\" --filter-name \"${it.name}\" "}
+    params[sp].hard_filters.each {filter_str+= " -filter \"${it.filter}\" --filter-name \"${it.name}\" "}
     """
     gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" VariantFiltration \
     ${filter_str} \
@@ -426,19 +447,20 @@ process GATK_APPLY_VQSR {
 }
 
 workflow {
-
+    // check parameters
+    check_parameters
     // print key parameters
     print_parameters()
 
     // Get paths
     def paths = [:]
-    paths.parasite = [fasta : file(params.parasite.fasta),  \
-            fasta_prefix: file(params.parasite.fasta_prefix) ]
+    paths.parasite = [fasta : file(params[sp].fasta),  \
+            fasta_prefix: file(params[sp].fasta_prefix) ]
     paths.host = [fasta : [], fasta_prefix: [] ]
     params.host.fasta.each {it -> paths.host.fasta.add(file(it))}
     params.host.fasta_prefix.each {it -> paths.host.fasta_prefix.add(file(it))}
     paths.known_sites = []
-    params.known_sites.each {it -> paths.known_sites.add(file(it))}
+    params[sp].known_sites.each {it -> paths.known_sites.add(file(it))}
 
     // prepare tmpdir for gatk
     def tmpdir = file(params.gatk_tmpdir)
@@ -513,7 +535,7 @@ workflow {
             | first
 
         // Import gvcf files to genomicsdb
-        interval_ch = channel.fromList(params.genome_intervals[params.split])
+        interval_ch = channel.fromList(params[sp].genome_intervals[params.split])
         GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch) 
 
         // Genotype gvcf genomics db
@@ -531,13 +553,13 @@ workflow {
         if (params.vqsr == true) {
             GATK_VARIANT_RECALIBRATOR( 
                 GATK_SELECT_VARIANTS.out, 
-                params.vqsr_resources, 
-                params.vqsr_opts, 
-                params.vqsr_mode, 
+                params[sp].vqsr_resources, 
+                params[sp].vqsr_opts, 
+                params[sp].vqsr_mode, 
                 paths.parasite.fasta)
             GATK_APPLY_VQSR(
                 GATK_SELECT_VARIANTS.out.combine(GATK_VARIANT_RECALIBRATOR.out, by: 0),
-                params.vqsr_mode, 
+                params[sp].vqsr_mode, 
                 paths.parasite.fasta)
         }
     }

@@ -18,6 +18,12 @@ class URLS:
             "local_fn": "PlasmoDB-44_Pfalciparum3D7_Genome.fasta",
             "fasta_fn": "PlasmoDB-44_Pfalciparum3D7_Genome.fasta",
         },
+        {
+            "prefix": "PlasmoDB-50_PvivaxP01_Genome",
+            "url": "https://plasmodb.org/common/downloads/release-50/PvivaxP01/fasta/data/PlasmoDB-50_PvivaxP01_Genome.fasta",
+            "local_fn": "PlasmoDB-50_PvivaxP01_Genome.fasta",
+            "fasta_fn": "PlasmoDB-50_PvivaxP01_Genome.fasta",
+        },
     ]
     pf_crosses_v1 = {
         "server": "ngs.sanger.ac.uk",

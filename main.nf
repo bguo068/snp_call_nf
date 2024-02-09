@@ -160,7 +160,7 @@ process GATK_BASE_RECALIBRATOR {
     output:
     tuple val(sample), path(bam), path("recal_data.table")
     shell:
-    def known_sites_str = known_sites.join(" --known_sites ")
+    def known_sites_str = known_sites.join(" --known-sites ")
     """
     gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir}  -Xmx${task.memory.giga}G" \
         BaseRecalibrator -I $bam -O recal_data.table \

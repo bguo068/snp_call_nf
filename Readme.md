@@ -44,7 +44,7 @@ cd snp_call_nf
 # NOTE: The nextflow engine and the pipeline may need different version of java.
 # We use two different Conda environments to address the conflict.
 # install nextflow
-conda env create -f env/nf.ymal
+conda env create -f env/nf.yaml
 # install snp_call_nf
 conda env create -f env/snp_call_nf.yaml
 ```

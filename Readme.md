@@ -56,6 +56,10 @@ conda env create -f env/snp_call_nf.yaml
 ```
 ln -s /local/projects-t3/toconnor_grp/bing.guo/ref/* ref/
 ```
+or
+```
+ln -s /local/projects-t2/CVD/Takala-Harrison/Cambodia_Bing/ref/* ref/
+```
 
 - Link the ref files on Rosalind, the reference file can be linked by running
 ```

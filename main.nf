@@ -13,6 +13,7 @@ filtering:
 coverage_only:\t ${params.coverage_only}
 outdir:\t${params.outdir}
 tmpdir:\t${params.gatk_tmpdir}
+parasite_reads_only:\t${params.parasite_reads_only}
 gvcf_only:\t${params.gvcf_only}
 =============================================================""")
 }
@@ -64,6 +65,7 @@ process SAMTOOLS_VIEW_RM_HOST_READS {
 
 process SAMTOOLS_FASTQ {
     tag "$meta.Sample~$meta.Run"
+    publishDir "$params.outdir/parasite_reads", pattern: "*.fasta.gz"
     input:
     tuple val(meta), path(bam)
     output:
@@ -468,8 +470,13 @@ workflow {
     input_ch |  BOWTIE2_ALIGN_TO_HOST
     BOWTIE2_ALIGN_TO_HOST.out.bam  | SAMTOOLS_VIEW_RM_HOST_READS | SAMTOOLS_FASTQ
 
+    ch_parasite_reads = SAMTOOLS_FASTQ.out
+    if (params.parasite_reads_only ){
+        ch_parasite_reads = Channel.empty()
+    }
+
     // Align to parasite genome
-    BOWTIE2_ALIGN_TO_PARASITE( SAMTOOLS_FASTQ.out, paths.parasite.fasta_prefix) 
+    BOWTIE2_ALIGN_TO_PARASITE( ch_parasite_reads, paths.parasite.fasta_prefix) 
     
     // Non-blocking grouped gathering
     n_run = channel.fromPath(params.fq_map) | splitCsv(skip:1,  sep: '\t') \

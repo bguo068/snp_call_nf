@@ -97,6 +97,16 @@ cd ..
 4. Enable `vqsr` variant filtering. By default, `vqsr` is not enabled. To enable
 this option, you can specify `--vqsr true` to the nextflow command line
 
+There are options to run parts of the pipeline:
+
+- If '--parasite_reads_only' is specified, the pipeline will stop after host
+reads are removed and the remaining reads are saved to FQ files.
+- If '--coverage_only' is specified, the pipeline will stop after completing
+the necessary steps to produce the reads coverage, before the GATK_APPLY_BQSR
+process.
+- If '--gvcf_only' is specified, the pipeline will stop after generating
+per-sample gVCF files.
+
 # Important input and output files
 
 1. Main input file is `./fastq_map.tsv`

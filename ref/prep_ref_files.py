@@ -5,6 +5,9 @@ from subprocess import run
 
 
 class URLS:
+    host_idx = 0
+    pf_idx = 1
+    concat_idx = 2
     genomes = [
         {
             "prefix": "host/hg38",
@@ -17,6 +20,10 @@ class URLS:
             "url": "https://plasmodb.org/common/downloads/release-44/Pfalciparum3D7/fasta/data/PlasmoDB-44_Pfalciparum3D7_Genome.fasta",
             "local_fn": "PlasmoDB-44_Pfalciparum3D7_Genome.fasta",
             "fasta_fn": "PlasmoDB-44_Pfalciparum3D7_Genome.fasta",
+        },
+        {
+            "prefix": "concat/hg38_pf3d7v44",
+            "fasta_fn": "concat/hg38_pf3d7v44.fasta",
         },
     ]
     pf_crosses_v1 = {
@@ -39,6 +46,9 @@ class URLS:
 
 def download_genome_fasta_files():
     for genome in URLS.genomes:
+        prefix = genome['prefix']
+        if "concat" in prefix:
+            continue
         # local file
         url: str = genome["url"]
         local_fn: str = genome["local_fn"]
@@ -61,6 +71,20 @@ def download_genome_fasta_files():
                 f"""gzip -dc {local_fn} > {target_fn}; rm {local_fn}""", shell=True
             )
             assert res.returncode == 0
+
+
+def concat_pf_human_genomes():
+    host_g = URLS.genomes[URLS.host_idx]["fasta_fn"]
+    pf_g = URLS.genomes[URLS.pf_idx]["fasta_fn"]
+    concat_g = URLS.genomes[URLS.concat_idx]["fasta_fn"]
+    if Path(concat_g).exists():
+        return
+    Path(concat_g).parent.mkdir(parents=True, exist_ok=True)
+    cmd = f"cat {host_g} {pf_g} | gzip > {concat_g}"
+    res = run(cmd, shell=True, capture_output=True)
+    if res.returncode != 0:
+        print(res.stderr)
+        exit(-1)
 
 
 def index_fasta_files():
@@ -168,10 +192,13 @@ def known_variants_from_pf_crosses_v1():
 
 
 if __name__ == "__main__":
-
     print("downloading fasta files")
     download_genome_fasta_files()
     print("Done obtaining fasta files")
+
+    print("concat host and parasite genome to a pseudo genome")
+    concat_pf_human_genomes()
+    print("Done concatenating the pseudo genome")
 
     print("indexing will take a long time ....")
     index_fasta_files()

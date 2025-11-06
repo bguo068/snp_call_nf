@@ -111,6 +111,13 @@ ena_data/ena_fastq_map.tsv`
 
 There are options to run parts of the pipeline:
 
+- If `--use_concat_genome` is specified, a less aggressive host read -filtering
+method is used. By default, raw reads are first aligned to the human genome and
+any reads that align are removed before remapping to the parasite genome. When
+`--use_concat_genome` is used, raw reads are first aligned to a concatenated
+(pseudo) genome containing both the human and parasite references. Reads that
+align to parasite chromosomes are retained and then realigned to the parasite
+genome; reads aligning to human chromosomes are ignored.
 - If `--parasite_reads_only` is specified, the pipeline will stop after host
   reads are removed and the remaining reads are saved to FQ files.
 - If `--coverage_only` is specified, the pipeline will stop after completing

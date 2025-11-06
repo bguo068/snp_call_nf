@@ -11,6 +11,7 @@ split:\t${params.split}
 filtering:
 \thard:\t ${params.hard}
 \tvqsr:\t ${params.vqsr}
+use_concat_genome: ${params.use_concat_genome}
 outdir:\t${params.outdir}
 tmpdir:\t${params.gatk_tmpdir}
 parasite_reads_only:\t${params.parasite_reads_only}
@@ -19,6 +20,62 @@ gvcf_only:\t${params.gvcf_only}
 ============================================================="""
     )
 }
+
+process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
+    tag "${meta.Sample}~${meta.Run}"
+    publishDir "${params.outdir}/flagstat_host", pattern: "*.flagstat"
+    publishDir "${params.outdir}/read_length", pattern: "*_read_length.txt"
+
+    input:
+    tuple val(meta), path(fastq)
+
+    output:
+    tuple val(meta), path("*to_concat.bam"), emit: concat_bam
+    tuple val(meta), path("*to_parasite.bam"), emit: parasite_bam
+    tuple val(meta), path("*.flagstat"), emit: flagstat
+    tuple val(meta), path("*_read_length.txt"), emit: read_length
+
+    script:
+    def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U ${fastq}"
+    def read_group = "--rg-id ${meta.Sample} --rg SM:${meta.Sample} --rg PL:Illumina"
+    """
+    #! /usr/bin/env bash
+
+    set -eEux -o pipefail
+    # align to host
+    bowtie2 -x ${meta.Concat_ref_prefix}  ${reads} ${read_group} -p ${task.cpus} | \
+        samtools view -q 0 -bS | \
+        samtools sort --threads ${task.cpus} -o ${meta.Sample}~${meta.Run}~to_concat.bam -
+    
+    # get read length
+    set +o pipefail
+    samtools view ${meta.Sample}~${meta.Run}~to_concat.bam | \
+         awk '{a+=length(\$10)} {if (NR>100000) {print (a/NR); exit}} END{print (a/NR)}' \
+        > ${meta.Sample}~${meta.Run}_read_length.txt
+    set -o pipefail
+
+    # get parasite chromosome names
+    parasite_chrnames=`grep -E '^>' ${meta.Parasite_ref_prefix}.fasta | sed 's:^>\\s*::' | sed 's:\\s.*\$::' | tr '\\n' ' '`
+    echo \$parasite_chrnames
+
+    # subset to alignment to parasite chromosome
+    samtools index ${meta.Sample}~${meta.Run}~to_concat.bam
+    samtools view -b ${meta.Sample}~${meta.Run}~to_concat.bam  \${parasite_chrnames}  -o ${meta.Sample}~${meta.Run}~to_parasite.bam  
+
+    # get flatstats
+    samtools flagstat ${meta.Sample}~${meta.Run}~to_parasite.bam \
+        > ~to_parasite.bam.flagstat
+    rm -f sorted.bam
+    """
+
+    stub:
+    """ 
+    touch ${meta.Sample}~${meta.Run}~to_concat.bam{,.flagstat}
+    touch ${meta.Sample}~${meta.Run}_read_length.txt
+    """
+}
+
+
 
 process BOWTIE2_ALIGN_TO_HOST {
     tag "${meta.Sample}~${meta.Run}"
@@ -519,6 +576,9 @@ workflow {
     paths.host = [fasta: [], fasta_prefix: []]
     params.host.fasta.each { it -> paths.host.fasta.add(file(it)) }
     params.host.fasta_prefix.each { it -> paths.host.fasta_prefix.add(file(it)) }
+    paths.concat = [fasta: [], fasta_prefix: []]
+    params.concat.fasta.each { it -> paths.concat.fasta.add(file(it)) }
+    params.concat.fasta_prefix.each { it -> paths.concat.fasta_prefix.add(file(it)) }
     paths.known_sites = []
     params.known_sites.each { it -> paths.known_sites.add(file(it)) }
 
@@ -528,31 +588,52 @@ workflow {
         tmpdir.mkdirs()
     }
 
-    // Prepare input chanel
-    input_ch = channel.fromPath(params.fq_map)
-        | splitCsv(skip: 1, sep: '\t')
-        | groupTuple(by: [0, 1, 2], sort: true)
-        | map { sample, host_id, run, _mate_id, fq ->
-            assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
-            def meta = [:]
-            meta.Sample = sample
-            meta.Run = run
-            meta.Host_ref_prefix = paths.host.fasta_prefix[host_id.toInteger()]
-            meta.is_paired = fq.size() == 2 ? 1 : 0
-            def fq_paths = []
-            fq.each { it -> fq_paths.add(file(it)) }
-            return [meta, fq_paths]
-        }
+    if (params.use_concat_genome) {
+        // Prepare input chanel
+        input_ch = channel.fromPath(params.fq_map)
+            | splitCsv(skip: 1, sep: '\t')
+            | groupTuple(by: [0, 1, 2], sort: true)
+            | map { sample, host_id, run, _mate_id, fq ->
+                assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
+                def meta = [:]
+                meta.Sample = sample
+                meta.Run = run
+                meta.Concat_ref_prefix = paths.concat.fasta_prefix[host_id.toInteger()]
+                meta.Parasite_ref_prefix = paths.parasite.fasta_prefix
+                meta.is_paired = fq.size() == 2 ? 1 : 0
+                def fq_paths = []
+                fq.each { it -> fq_paths.add(file(it)) }
+                return [meta, fq_paths]
+            }
+        input_ch | BOWTIE2_ALIGN_TO_CONCAT_GENOME
+        BOWTIE2_ALIGN_TO_CONCAT_GENOME.out.parasite_bam | SAMTOOLS_FASTQ
+    }
+    else {
+        // Prepare input chanel
+        input_ch = channel.fromPath(params.fq_map)
+            | splitCsv(skip: 1, sep: '\t')
+            | groupTuple(by: [0, 1, 2], sort: true)
+            | map { sample, host_id, run, _mate_id, fq ->
+                assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
+                def meta = [:]
+                meta.Sample = sample
+                meta.Run = run
+                meta.Host_ref_prefix = paths.host.fasta_prefix[host_id.toInteger()]
+                meta.is_paired = fq.size() == 2 ? 1 : 0
+                def fq_paths = []
+                fq.each { it -> fq_paths.add(file(it)) }
+                return [meta, fq_paths]
+            }
 
-    // Remove reads mapped to host and split unmapped to fastq files
-    input_ch | BOWTIE2_ALIGN_TO_HOST
-    BOWTIE2_ALIGN_TO_HOST.out.bam | SAMTOOLS_VIEW_RM_HOST_READS | SAMTOOLS_FASTQ
+        // Remove reads mapped to host and split unmapped to fastq files
+        input_ch | BOWTIE2_ALIGN_TO_HOST
+        BOWTIE2_ALIGN_TO_HOST.out.bam | SAMTOOLS_VIEW_RM_HOST_READS | SAMTOOLS_FASTQ
+    }
 
     ch_parasite_reads = SAMTOOLS_FASTQ.out
     if (params.parasite_reads_only) {
-        ch_parasite_reads = Channel.empty()
+        ch_parasite_reads = channel.empty()
     }
-
     // Align to parasite genome
     BOWTIE2_ALIGN_TO_PARASITE(ch_parasite_reads, paths.parasite.fasta_prefix)
 
@@ -583,7 +664,7 @@ workflow {
 
     // stop before GATK_HAPLOTYPE_CALLER if only coverage inforation is need
     if (params.coverage_only) {
-        ch_bqsr_bam = Channel.empty()
+        ch_bqsr_bam = channel.empty()
     }
     else {
         ch_bqsr_bam = GATK_APPLY_BQSR.out

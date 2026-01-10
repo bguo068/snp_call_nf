@@ -95,8 +95,10 @@ ena_data/download_ena_data.sh` (it may take hours to download all the
 ena_data/ena_fastq_map.tsv`
    - Test it on SGE server: `conda activate nf; nextflow main.nf -profile sge`
      - This will use a small dataset from `test_data` folder
-   - You will need to edit `fastq_map.tsv` file to include the raw
-     reads(`fastq.gz` files) of your own samples.
+   - Test it on Slurm server: similar to SGE server, but use `-profile slurm`
+   - For working with your own data (not test data), you will need to edit `fastq_map.tsv` file to include the raw
+     reads(`fastq.gz` files) of your own samples. If using a SGE or Slurm cluster, toggle the
+     corresponding profile as needed, e.g.: `conda activate nf; nextflow main.nf -profile slurm --fq_map [your_fq_map.tsv]`
 
 ## Optional arguments
 

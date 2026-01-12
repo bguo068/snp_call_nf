@@ -132,7 +132,7 @@ process SAMTOOLS_VIEW_RM_HOST_READS {
 
 process SAMTOOLS_FASTQ {
     tag "${meta.Sample}~${meta.Run}"
-    publishDir "${params.outdir}/parasite_reads", pattern: "*.fasta.gz"
+    publishDir "${params.outdir}/parasite_reads/${meta.Sample}~${meta.Run}", pattern: "*.fastq.gz"
 
     input:
     tuple val(meta), path(bam)

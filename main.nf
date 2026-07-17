@@ -424,7 +424,7 @@ process GATK_GENOTYPE_GVCFS {
     val ref
 
     output:
-    tuple env('DBNAME'), path("*.vcf"), path("*.idx")
+    tuple env(DBNAME), path("*.vcf"), path("*.idx")
 
     script:
     def dbname = db.getName()

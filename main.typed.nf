@@ -40,10 +40,11 @@ process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
 
     output:
     rec = record(
-        concat_bam: tuple(meta, file("*to_concat.bam")),
-        parasite_bam: tuple(meta, file("*to_parasite.bam")),
-        flagstat: tuple(meta, file("*.flagstat")),
-        read_length: tuple(meta, file("*_read_length.txt")),
+        meta: meta,
+        concat_bam: file("*to_concat.bam"),
+        parasite_bam: file("*to_parasite.bam"),
+        flagstat: file("*.flagstat"),
+        read_length: file("*_read_length.txt"),
     )
 
     script:
@@ -51,8 +52,8 @@ process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
     def read_group = "--rg-id ${meta.Sample} --rg SM:${meta.Sample} --rg PL:Illumina"
     """
     #! /usr/bin/env bash
-
     set -eEux -o pipefail
+
     # align to host
     bowtie2 -x ${meta.Concat_ref_prefix}  ${reads} ${read_group} -p ${task.cpus}|\
         samtools view -q 0 -bS|\
@@ -66,7 +67,7 @@ process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
     set -o pipefail
 
     # get parasite chromosome names
-    parasite_chrnames=`grep -E '^>' ${meta.Parasite_ref_prefix}.fasta.sed 's:^>\\s*::'.sed 's:\\s.*\$::'.tr '\\n' ' '`
+    parasite_chrnames=`grep -E '^>' ${meta.Parasite_ref_prefix}.fasta | sed 's:^>\\s*::' | sed 's:\\s.*\$::' | tr '\\n' ' '`
     echo \$parasite_chrnames
 
     # subset to alignment to parasite chromosome
@@ -310,6 +311,7 @@ process BEDTOOLS_GENOMECOV {
 
     output:
     record(
+        sample: sample,
         bedgraph: file("*recalibrated.coverage.BedGraph.gz"),
         summary: file("*.coverage.summary.txt"),
     )
@@ -370,7 +372,7 @@ process SAMTOOLS_FLAGSTAT {
     tuple(sample: String, bam: Path)
 
     output:
-    file("*.flagstat")
+    tuple(sample, file("*.flagstat"))
 
     script:
     """
@@ -603,62 +605,61 @@ workflow {
         tmpdir.mkdirs()
     }
 
+    // group read pairs if there are
+    ch_read_pairs = channel.fromPath(params.fq_map)
+        .flatMap { csv -> csv.splitCsv(skip: 1, sep: '\t') }
+        .map { row ->
+            def fields = row as List<?>
+            tuple(
+                tuple(fields[0].toString(), fields[1].toInteger(), fields[2].toString()),
+                fields[4].toString(),
+            )
+        }
+        .groupBy()
+        .map { key, fq_unsorted ->
+            def (sample, host_id, run) = key
+            def fq = fq_unsorted.toSorted()
+            assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
+            tuple(sample, host_id, run, fq)
+        }
+
     if (params.use_concat_genome) {
         // Prepare input chanel
         // csv contains sample, host_id, run, mate_id, fq_path
-        input_ch = channel.fromPath(params.fq_map)
-            .flatMap { csv -> csv.splitCsv(skip: 1, sep: '\t') }
-            .map { row ->
-                def fields = row as List<?>
-                tuple(
-                    tuple(fields[0].toString(), fields[1].toInteger(), fields[2].String()),
-                    fields[4].toString(),
-                )
-            }
-            .groupBy()
-            .map { key, fq_unsorted ->
-                def (sample, host_id, run) = key
-                def fq = fq_unsorted.toSorted()
-                assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
-                def meta = record(
-                    Sample: sample,
-                    Run: run,
-                    Concat_ref_prefix: paths.concat.fasta_prefix[host_id.toInteger()],
-                    Parasite_ref_prefix: paths.parasite.fasta_prefix,
-                    is_paired: fq.size() == 2 ? 1 : 0,
-                )
-                def fq_paths = fq.collect { it -> file(it) }
-                return tuple(meta, fq_paths)
-            }
+        input_ch = ch_read_pairs.map { sample, host_id, run, fq ->
+            def meta = record(
+                Sample: sample,
+                Run: run,
+                Concat_ref_prefix: paths.concat.fasta_prefix[host_id.toInteger()],
+                Parasite_ref_prefix: paths.parasite.fasta_prefix,
+                is_paired: fq.size() == 2 ? 1 : 0,
+            )
+            def fq_paths = fq.collect { it -> file(it) }
+            return tuple(meta, fq_paths)
+        }
         out_BOWTIE2_ALIGN_TO_CONCAT_GENOME = BOWTIE2_ALIGN_TO_CONCAT_GENOME(input_ch)
-        out_SAMTOOLS_FASTQ = SAMTOOLS_FASTQ(out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> rec.parasite_bam })
+        out_SAMTOOLS_FASTQ = SAMTOOLS_FASTQ(
+            out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> tuple(rec.meta, rec.parasite_bam) }
+        )
+
+
+        /// for report
+        rp_flagstat_raw = out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> tuple(rec.meta, rec.flagstat) }
+        rp_readlen_raw = out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> tuple(rec.meta, rec.read_length) }
     }
     else {
         // Prepare input chanel
         // csv contains sample, host_id, run, mate_id, fq_path
-        input_ch = channel.fromPath(params.fq_map)
-            .flatMap { csv -> csv.splitCsv(skip: 1, sep: '\t') }
-            .map { row ->
-                def fields = row as List<?>
-                tuple(
-                    tuple(fields[0].toString(), fields[1].toInteger(), fields[2].toString()),
-                    fields[4].toString(),
-                )
-            }
-            .groupBy()
-            .map { key, fq_unsorted ->
-                def (sample, host_id, run) = key
-                def fq = fq_unsorted.toSorted()
-                assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
-                def meta = record(
-                    Sample: sample,
-                    Run: run,
-                    Host_ref_prefix: paths.host.fasta_prefix[host_id.toInteger()],
-                    is_paired: fq.size() == 2 ? 1 : 0,
-                )
-                def fq_paths = fq.collect { it -> file(it) }
-                return tuple(meta, fq_paths)
-            }
+        input_ch = ch_read_pairs.map { sample, host_id, run, fq ->
+            def meta = record(
+                Sample: sample,
+                Run: run,
+                Host_ref_prefix: paths.host.fasta_prefix[host_id.toInteger()],
+                is_paired: fq.size() == 2 ? 1 : 0,
+            )
+            def fq_paths = fq.collect { it -> file(it) }
+            return tuple(meta, fq_paths)
+        }
 
         // Remove reads mapped to host and split unmapped to fastq files
         out_BOWTIE2_ALIGN_TO_HOST = BOWTIE2_ALIGN_TO_HOST(input_ch)

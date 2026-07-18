@@ -580,6 +580,8 @@ process GATK_APPLY_VQSR {
 
 workflow {
 
+    main:
+
     // print key parameters
     print_parameters()
 
@@ -665,14 +667,24 @@ workflow {
         out_BOWTIE2_ALIGN_TO_HOST = BOWTIE2_ALIGN_TO_HOST(input_ch)
         out_SAMTOOLS_VIEW_RM_HOST_READS = SAMTOOLS_VIEW_RM_HOST_READS(out_BOWTIE2_ALIGN_TO_HOST.map { rec -> tuple(rec.meta, rec.bam) })
         out_SAMTOOLS_FASTQ = SAMTOOLS_FASTQ(out_SAMTOOLS_VIEW_RM_HOST_READS)
+
+        /// for report
+        rp_flagstat_raw = out_BOWTIE2_ALIGN_TO_HOST.map { rec -> tuple(rec.meta, rec.flagstat) }
+        rp_readlen_raw = out_BOWTIE2_ALIGN_TO_HOST.map { rec -> tuple(rec.meta, rec.read_length) }
     }
 
     ch_parasite_reads = out_SAMTOOLS_FASTQ
     if (params.parasite_reads_only) {
         ch_parasite_reads = channel.empty()
     }
+
+    /// for report
+    rp_parasite_reads = ch_parasite_reads.flatMap { meta, fq_lst -> fq_lst.withIndex().collect { fq, idx -> tuple(meta, idx + 1, fq) } }
+
     // Align to parasite genome
     out_BOWTIE2_ALIGN_TO_PARASITE = BOWTIE2_ALIGN_TO_PARASITE(ch_parasite_reads, paths.parasite.fasta_prefix)
+    /// for report
+    rp_flagstat_parasite = out_BOWTIE2_ALIGN_TO_PARASITE.map { rec -> tuple(rec.meta, rec.flagstat) }
 
     // Non-blocking grouped gathering
     // csv contains sample, host_id, run, mate_id, fq_path
@@ -700,9 +712,14 @@ workflow {
     out_GATK_BASE_RECALIBRATOR = GATK_BASE_RECALIBRATOR(out_PICARD_MARK_DUPLICATES, paths.parasite.fasta, paths.known_sites)
     out_GATK_APPLY_BQSR = GATK_APPLY_BQSR(out_GATK_BASE_RECALIBRATOR, paths.parasite.fasta)
 
+    rp_recal_bam = out_GATK_APPLY_BQSR
+
     // Generate stat files
-    BEDTOOLS_GENOMECOV(out_GATK_APPLY_BQSR, paths.parasite.fasta)
-    SAMTOOLS_FLAGSTAT(out_GATK_APPLY_BQSR)
+    out_BEDTOOLS_GENOMECOV = BEDTOOLS_GENOMECOV(out_GATK_APPLY_BQSR, paths.parasite.fasta)
+    rp_recal_bam_coverage = out_BEDTOOLS_GENOMECOV
+
+    out_SAMTOOLS_FLAGSTAT = SAMTOOLS_FLAGSTAT(out_GATK_APPLY_BQSR)
+    rp_recal_bam_flagstat = out_SAMTOOLS_FLAGSTAT
 
     // stop before GATK_HAPLOTYPE_CALLER if only coverage inforation is need
     def ch_bqsr_bam: Channel<Tuple<String, Path>>
@@ -716,54 +733,131 @@ workflow {
     // Generate gvcf
     out_GATK_HAPLOTYPE_CALLER = GATK_HAPLOTYPE_CALLER(ch_bqsr_bam, paths.parasite.fasta)
 
-    if (!params.gvcf_only) {
-        // Collect information to make gvcf_map file
-        gvcf_map_ch = out_GATK_HAPLOTYPE_CALLER
-            .map { sample, gvcf, _idx -> "${sample}\t${gvcf}" }
-            .collect()
-            .map { lines ->
-                def out_file = file("gvcf_map.txt")
-                out_file.text = lines.toSorted().join("\n") + "\n"
-                return out_file
-            }
-        // .collectFile(name: "gvcf_map.txt", newLine: true, sort: true).first()
+    rp_gvcf = out_GATK_HAPLOTYPE_CALLER
 
 
-        // Import gvcf files to genomicsdb
-        def interval_ch: Channel<String>
-        interval_ch = channel.fromList(params.genome_intervals[params.split])
-        out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch)
+    if (params.gvcf_only) {
+        // this will stop any steps after haplotype caller 
+        out_GATK_HAPLOTYPE_CALLER = channel.empty()
+    }
 
-        // Genotype gvcf genomics db
-        out_GATK_GENOTYPE_GVCFS = GATK_GENOTYPE_GVCFS(out_GATK_GENOMICS_DB_IMPORT, paths.parasite.fasta)
-
-        // Select SNP only
-        out_GATK_SELECT_VARIANTS = GATK_SELECT_VARIANTS(out_GATK_GENOTYPE_GVCFS, paths.parasite.fasta)
-
-        // Hard filtering and Keep 'PASS' variants
-        if (params.hard == true) {
-            GATK_VARIANT_FILTRATION(out_GATK_SELECT_VARIANTS, paths.parasite.fasta)
+    // Collect information to make gvcf_map file
+    gvcf_map_ch = out_GATK_HAPLOTYPE_CALLER
+        .map { sample, gvcf, _idx -> "${sample}\t${gvcf}" }
+        .collect()
+        .map { lines ->
+            def out_file = file("gvcf_map.txt")
+            out_file.text = lines.toSorted().join("\n") + "\n"
+            return out_file
         }
 
-        // VQSR variant filtering
-        if (params.vqsr == true) {
-            out_GATK_VARIANT_RECALIBRATOR = GATK_VARIANT_RECALIBRATOR(
-                out_GATK_SELECT_VARIANTS,
-                params.vqsr_resources,
-                params.vqsr_opts,
-                params.vqsr_mode,
-                paths.parasite.fasta,
-            )
-            GATK_APPLY_VQSR(
-                out_GATK_SELECT_VARIANTS.map { dbname, vcf, vcf_idx -> record(dbname: dbname, vcf: vcf, vcf_idx: vcf_idx) }.join(
-                    out_GATK_VARIANT_RECALIBRATOR.map { dbname, recal, tranches ->
-                        record(dbname: dbname, recal: recal, tranches: tranches)
-                    },
-                    by: "dbname"
-                ).map { rec -> tuple(rec.dbname, rec.vcf, rec.vcf_idx, rec.recal, rec.tranches) },
-                params.vqsr_mode,
-                paths.parasite.fasta,
-            )
+    // Import gvcf files to genomicsdb
+    def interval_ch: Channel<String>
+    interval_ch = channel.fromList(params.genome_intervals[params.split])
+    out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch)
+
+    // Genotype gvcf genomics db
+    out_GATK_GENOTYPE_GVCFS = GATK_GENOTYPE_GVCFS(out_GATK_GENOMICS_DB_IMPORT, paths.parasite.fasta)
+
+    // Select SNP only
+    out_GATK_SELECT_VARIANTS = GATK_SELECT_VARIANTS(out_GATK_GENOTYPE_GVCFS, paths.parasite.fasta)
+
+    // Hard filtering and Keep 'PASS' variants
+    def rp_hardfilt_vcf: Channel<Tuple<String, Path, Path>> = channel.fromList([])
+    if (params.hard == true) {
+        out_GATK_VARIANT_FILTRATION = GATK_VARIANT_FILTRATION(out_GATK_SELECT_VARIANTS, paths.parasite.fasta)
+        rp_hardfilt_vcf = out_GATK_VARIANT_FILTRATION
+    }
+
+    // VQSR variant filtering
+    def rp_vqsrfilt_vcf: Channel<Tuple<String, Path>> = channel.empty()
+    if (params.vqsr == true) {
+        out_GATK_VARIANT_RECALIBRATOR = GATK_VARIANT_RECALIBRATOR(
+            out_GATK_SELECT_VARIANTS,
+            params.vqsr_resources,
+            params.vqsr_opts,
+            params.vqsr_mode,
+            paths.parasite.fasta,
+        )
+        out_GATK_APPLY_VQSR = GATK_APPLY_VQSR(
+            out_GATK_SELECT_VARIANTS.map { dbname, vcf, vcf_idx -> record(dbname: dbname, vcf: vcf, vcf_idx: vcf_idx) }.join(
+                out_GATK_VARIANT_RECALIBRATOR.map { dbname, recal, tranches ->
+                    record(dbname: dbname, recal: recal, tranches: tranches)
+                },
+                by: "dbname"
+            ).map { rec -> tuple(rec.dbname, rec.vcf, rec.vcf_idx, rec.recal, rec.tranches) },
+            params.vqsr_mode,
+            paths.parasite.fasta,
+        )
+
+        rp_vqsrfilt_vcf = out_GATK_APPLY_VQSR
+    }
+
+    publish:
+    rp_flagstat_raw       = rp_flagstat_raw
+    rp_readlen_raw        = rp_readlen_raw
+    rp_parasite_reads     = rp_parasite_reads
+    rp_flagstat_parasite  = rp_flagstat_parasite
+    rp_recal_bam          = rp_recal_bam
+    rp_recal_bam_coverage = rp_recal_bam_coverage
+    rp_recal_bam_flagstat = rp_recal_bam_flagstat
+    rp_gvcf               = rp_gvcf
+    rp_hardfilt_vcf       = rp_hardfilt_vcf
+    rp_vqsrfilt_vcf       = rp_vqsrfilt_vcf
+}
+
+output {
+    rp_flagstat_raw {
+        path { meta, flagstat ->
+            flagstat >> "flagstat_raw/${meta.Sample}~${meta.Run}_flagstat.txt"
+        }
+    }
+    rp_readlen_raw {
+        path { meta, readlen ->
+            readlen >> "readlen_raw/${meta.Sample}~${meta.Run}_readlen.txt"
+        }
+    }
+    rp_parasite_reads {
+        path { meta, idx, fq ->
+            fq >> "parasite_reads/${meta.Sample}~${meta.Run}_r${idx}.fq.gz"
+        }
+    }
+    rp_flagstat_parasite {
+        path { meta, path ->
+            path >> "flagstat_parasite/${meta.Sample}~${meta.Run}_flagstat.txt"
+        }
+    }
+    rp_recal_bam {
+        path { sample, bam ->
+            bam >> "recalibrated/${sample}_recal.bam"
+        }
+    }
+    rp_recal_bam_coverage {
+        path { rec ->
+            rec.bedgraph >> "recal_bam_coverage/${rec.sample}.BedGraph.gz"
+            rec.summary >> "recal_bam_coverage/${rec.sample}.summary.txt"
+        }
+    }
+    rp_recal_bam_flagstat {
+        path { sample, flagstat ->
+            flagstat >> "recal_bam_flagstat/${sample}_flagstat.txt"
+        }
+    }
+    rp_gvcf {
+        path { sample, vcf, idx ->
+            vcf >> "gvcf/${sample}.g.vcf"
+            idx >> "gvcf/${sample}.g.vcf.idx"
+        }
+    }
+    rp_hardfilt_vcf {
+        path { dbname, vcf, idx ->
+            vcf >> "hardfilt_vcf/${dbname}.hardfilt.vcf"
+            idx >> "hardfilt_vcf/${dbname}.hardfilt.vcf.idx"
+        }
+    }
+    rp_vqsrfilt_vcf {
+        path { dbname, vcf ->
+            vcf >> "vqsrfilt_vcf/${dbname}.vqsr.vcf"
         }
     }
 }

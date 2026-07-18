@@ -1,8 +1,9 @@
 #! /usr/bin/env nextflow
 
+nextflow.enable.types = true
 nextflow.enable.dsl = 2
 
-def print_parameters() {
+def print_parameters() -> Void {
     println(
         """======================== PARAMETERS ==========================
 fq_map:\t${file(params.fq_map)}
@@ -19,37 +20,48 @@ coverage_only:\t ${params.coverage_only}
 gvcf_only:\t${params.gvcf_only}
 ============================================================="""
     )
+    return null
+}
+
+record SampleMeta {
+    Sample: String
+    Run: String
+    Host_ref_prefix: Path?
+    Concat_ref_prefix: Path?
+    Parasite_ref_prefix: Path?
+    is_paired: Integer
 }
 
 process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
     tag "${meta.Sample}~${meta.Run}"
-    publishDir "${params.outdir}/flagstat_host", pattern: "*.flagstat"
-    publishDir "${params.outdir}/read_length", pattern: "*_read_length.txt"
 
     input:
-    tuple val(meta), path(fastq)
+    tuple(meta: SampleMeta, fastq: List<Path>)
 
     output:
-    tuple val(meta), path("*to_concat.bam"), emit: concat_bam
-    tuple val(meta), path("*to_parasite.bam"), emit: parasite_bam
-    tuple val(meta), path("*.flagstat"), emit: flagstat
-    tuple val(meta), path("*_read_length.txt"), emit: read_length
+    rec = record(
+        meta: meta,
+        concat_bam: file("*to_concat.bam"),
+        parasite_bam: file("*to_parasite.bam"),
+        flagstat: file("*.flagstat"),
+        read_length: file("*_read_length.txt"),
+    )
 
     script:
     def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U ${fastq}"
     def read_group = "--rg-id ${meta.Sample} --rg SM:${meta.Sample} --rg PL:Illumina"
     """
     #! /usr/bin/env bash
-
     set -eEux -o pipefail
+
     # align to host
-    bowtie2 -x ${meta.Concat_ref_prefix}  ${reads} ${read_group} -p ${task.cpus} | \
-        samtools view -q 0 -bS | \
+    bowtie2 -x ${meta.Concat_ref_prefix}  ${reads} ${read_group} -p ${task.cpus}|\
+        samtools view -q 0 -bS|\
         samtools sort --threads ${task.cpus} -o ${meta.Sample}~${meta.Run}~to_concat.bam -
     
     # get read length
     set +o pipefail
-    samtools view ${meta.Sample}~${meta.Run}~to_concat.bam | \
+    samtools view ${meta.Sample}~${meta.Run}~to_concat.bam|\
          awk '{a+=length(\$10)} {if (NR>100000) {print (a/NR); exit}} END{print (a/NR)}' \
         > ${meta.Sample}~${meta.Run}_read_length.txt
     set -o pipefail
@@ -79,26 +91,27 @@ process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
 
 process BOWTIE2_ALIGN_TO_HOST {
     tag "${meta.Sample}~${meta.Run}"
-    publishDir "${params.outdir}/flagstat_host", pattern: "*.flagstat"
-    publishDir "${params.outdir}/read_length", pattern: "*_read_length.txt"
 
     input:
-    tuple val(meta), path(fastq)
+    tuple(meta: SampleMeta, fastq: List<Path>)
 
     output:
-    tuple val(meta), path("*.bam"), emit: bam
-    tuple val(meta), path("*.flagstat"), emit: flagstat
-    tuple val(meta), path("*_read_length.txt"), emit: read_length
+    record(
+        meta: meta,
+        bam: file("*.bam"),
+        flagstat: file("*.flagstat"),
+        read_length: file("*_read_length.txt"),
+    )
 
     script:
     def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U ${fastq}"
     """
-    bowtie2 -x ${meta.Host_ref_prefix}  ${reads} -p ${task.cpus} | \
+    bowtie2 -x ${meta.Host_ref_prefix}  ${reads} -p ${task.cpus}|\
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_host.bam
     samtools flagstat ${meta.Sample}~${meta.Run}~to_host.bam \
         > ${meta.Sample}~${meta.Run}~to_host.bam.flagstat
-    samtools view ${meta.Sample}~${meta.Run}~to_host.bam | \
-        head -100000 | awk '{a+=length(\$10)}END{print (a/NR)}' \
+    samtools view ${meta.Sample}~${meta.Run}~to_host.bam|\
+        head -100000|awk '{a+=length(\$10)}END{print (a/NR)}' \
         > ${meta.Sample}~${meta.Run}_read_length.txt
 
     """
@@ -114,15 +127,15 @@ process SAMTOOLS_VIEW_RM_HOST_READS {
     tag "${meta.Sample}~${meta.Run}"
 
     input:
-    tuple val(meta), path(bam)
+    tuple(meta: SampleMeta, bam: Path)
 
     output:
-    tuple val(meta), path("*.bam")
+    bam = tuple(meta, file("*.bam"))
 
     script:
     def flag = meta.is_paired ? "-f 12 -F 256" : "-f 4"
     """
-    samtools view -b ${flag} ${bam} | \
+    samtools view -b ${flag} ${bam}|\
         samtools sort -@ ${task.cpus} -n -o ${meta.Sample}~${meta.Run}~unmapped_sorted.bam
     """
 
@@ -132,13 +145,12 @@ process SAMTOOLS_VIEW_RM_HOST_READS {
 
 process SAMTOOLS_FASTQ {
     tag "${meta.Sample}~${meta.Run}"
-    publishDir "${params.outdir}/parasite_reads/${meta.Sample}~${meta.Run}", pattern: "*.fastq.gz"
 
     input:
-    tuple val(meta), path(bam)
+    tuple(meta: SampleMeta, bam: Path)
 
     output:
-    tuple val(meta), path("*.fastq.gz")
+    fq = tuple(meta, files("*.fastq.gz").toSorted())
 
     script:
     if (meta.is_paired) {
@@ -165,21 +177,23 @@ process SAMTOOLS_FASTQ {
 
 process BOWTIE2_ALIGN_TO_PARASITE {
     tag "${meta.Sample}~${meta.Run}"
-    publishDir "${params.outdir}/flagstat_parasite", pattern: "*.flagstat"
 
     input:
-    tuple val(meta), path(fastq)
-    val parasite_ref_prefix
+    tuple(meta: SampleMeta, fastq: List<Path>)
+    parasite_ref_prefix: String
 
     output:
-    tuple val(meta), path("*.bam"), emit: bam
-    tuple val(meta), path("*.flagstat"), emit: flagstat
+    record(
+        meta: meta,
+        bam: file("*.bam"),
+        flagstat: file("*.flagstat"),
+    )
 
     script:
     def reads = meta.is_paired == 1 ? "-1 ${fastq[0]} -2 ${fastq[1]}" : "-U ${fastq}"
     def read_group = "--rg-id ${meta.Sample} --rg SM:${meta.Sample} --rg PL:Illumina"
     """
-    bowtie2 -x ${parasite_ref_prefix} ${reads} ${read_group} -p ${task.cpus} | \
+    bowtie2 -x ${parasite_ref_prefix} ${reads} ${read_group} -p ${task.cpus}|\
         samtools view -q 0 -bS > ${meta.Sample}~${meta.Run}~to_parasite.bam
     samtools flagstat ${meta.Sample}~${meta.Run}~to_parasite.bam \
         > ${meta.Sample}~${meta.Run}~to_parasite.bam.flagstat
@@ -193,10 +207,10 @@ process PICARD_MERGE_SORT_BAMS {
     tag "${sample}"
 
     input:
-    tuple val(sample), path(bams)
+    tuple(sample: String, bams: Bag<Path>)
 
     output:
-    tuple val(sample), path("merged_sorted.bam")
+    tuple(sample, file("merged_sorted.bam"))
 
     script:
     def to_merge = bams.size() > 1
@@ -205,13 +219,13 @@ process PICARD_MERGE_SORT_BAMS {
     def sort_opts = "-VALIDATION_STRINGENCY LENIENT -USE_JDK_DEFLATER true -USE_JDK_INFLATER true"
     """
     if ${to_merge}; then
-        gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
+        gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" \
 	MergeSamFiles -I ${in_bams} -O merged.bam ${merge_opts}
     else
-       ln -s ${bams} merged.bam
+       ln -s ${bams.join()} merged.bam
     fi
 
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" \
         SortSam -I merged.bam -O merged_sorted.bam --SORT_ORDER coordinate ${sort_opts}
     rm merged.bam
     """
@@ -224,15 +238,15 @@ process PICARD_MARK_DUPLICATES {
     tag "${sample}"
 
     input:
-    tuple val(sample), path(bam)
+    tuple(sample: String, bam: Path)
 
     output:
-    tuple val(sample), path("*dedup.bam")
+    bam = tuple(sample, file("*dedup.bam"))
 
     script:
     def opts = "--USE_JDK_DEFLATER true --USE_JDK_INFLATER true"
     """
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" \
     MarkDuplicates \
 	--REMOVE_DUPLICATES ${opts} \
         -I ${bam} -O ${sample}_dedup.bam --METRICS_FILE dedup_metrics.txt
@@ -246,17 +260,17 @@ process GATK_BASE_RECALIBRATOR {
     tag "${sample}"
 
     input:
-    tuple val(sample), path(bam)
-    val ref
-    val known_sites
+    tuple(sample: String, bam: Path)
+    ref: String
+    known_sites: List<String>
 
     output:
-    tuple val(sample), path(bam), path("recal_data.table")
+    bam_rectbl = tuple(sample, file(bam.name), file("recal_data.table"))
 
     script:
     def known_sites_str = known_sites.join(" --known-sites ")
     """
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir}  -Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir}  -Xmx${task.memory.toGiga()}G" \
         BaseRecalibrator -I ${bam} -O recal_data.table \
 	-R ${ref} --known-sites ${known_sites_str} 
     """
@@ -270,15 +284,15 @@ process GATK_APPLY_BQSR {
     publishDir "${params.outdir}/recalibrated"
 
     input:
-    tuple val(sample), path(bam), path(recal_table)
-    val ref
+    tuple(sample: String, bam: Path, recal_table: Path)
+    ref: String
 
     output:
-    tuple val(sample), path("*recalibrated.bam")
+    bam = tuple(sample, file("*recalibrated.bam"))
 
     script:
     """
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" \
         ApplyBQSR -I ${bam} -O ${sample}_recalibrated.bam \
         -R ${ref} --bqsr-recal-file ${recal_table}
     """
@@ -292,20 +306,23 @@ process BEDTOOLS_GENOMECOV {
     publishDir "${params.outdir}/coverage"
 
     input:
-    tuple val(sample), path(bam)
-    val ref
+    tuple(sample: String, bam: Path)
+    ref: String
 
     output:
-    path "*recalibrated.coverage.BedGraph.gz"
-    path "*.coverage.summary.txt"
+    record(
+        sample: sample,
+        bedgraph: file("*recalibrated.coverage.BedGraph.gz"),
+        summary: file("*.coverage.summary.txt"),
+    )
 
     script:
     """
-    bedtools genomecov -bg -ibam ${bam} -g ${ref} | \
+    bedtools genomecov -bg -ibam ${bam} -g ${ref}|\
         gzip -v > ${sample}_recalibrated.coverage.BedGraph.gz
 
     # summarize the coverage
-    zcat ${sample}_recalibrated.coverage.BedGraph.gz | \
+    zcat ${sample}_recalibrated.coverage.BedGraph.gz|\
         awk -v chrom_reg="${params.chrom_reg}" \
             -v genome_size_bp=${params.genome_size_bp} \
             -v sample="${sample}" \
@@ -352,10 +369,10 @@ process SAMTOOLS_FLAGSTAT {
     publishDir "${params.outdir}/flagstat"
 
     input:
-    tuple val(sample), path(bam)
+    tuple(sample: String, bam: Path)
 
     output:
-    path "*.flagstat"
+    tuple(sample, file("*.flagstat"))
 
     script:
     """
@@ -371,15 +388,15 @@ process GATK_HAPLOTYPE_CALLER {
     publishDir "${params.outdir}/gvcf"
 
     input:
-    tuple val(sample), path(bam)
-    val ref
+    tuple(sample: String, bam: Path)
+    ref: String
 
     output:
-    tuple val(sample), path("*.g.vcf"), path("*.g.vcf.idx")
+    gvcf = tuple(sample, file("*.g.vcf"), file("*.g.vcf.idx"))
 
     script:
     """
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" \
         HaplotypeCaller \
 	-I ${bam} -O ${sample}.g.vcf -R ${ref} -ERC GVCF
     """
@@ -392,15 +409,15 @@ process GATK_GENOMICS_DB_IMPORT {
     tag "${interval}"
 
     input:
-    val interval
-    path gvcf_map
+    interval: String
+    gvcf_map: Path
 
     output:
-    path "*", type: 'dir', maxDepth: 1
+    dbdir = file("*", type: 'dir', maxDepth: 1)
 
     script:
     def dbname = interval.replaceAll(":", "~")
-    def mem = Math.round(task.memory.giga * 0.75)
+    def mem = Math.round(task.memory.toGiga() * 0.75)
     // the rest of memory for c/c++ library
     """
     gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${mem}G" \
@@ -420,15 +437,15 @@ process GATK_GENOTYPE_GVCFS {
     tag "${db.getName()}"
 
     input:
-    path db
-    val ref
+    db: Path
+    ref: String
 
     output:
-    tuple env(DBNAME), path("*.vcf"), path("*.idx")
+    db_vcf = tuple(env('DBNAME'), file("*.vcf"), file("*.idx"))
 
     script:
     def dbname = db.getName()
-    def mem = Math.round(task.memory.giga * 0.75)
+    def mem = Math.round(task.memory.toGiga() * 0.75)
     // the rest of memory for TileDB library
 
     // use environmental variable to pass value to output channel
@@ -447,15 +464,15 @@ process GATK_SELECT_VARIANTS {
     tag "${dbname}"
 
     input:
-    tuple val(dbname), path(vcf), path(idx)
-    val ref
+    tuple(dbname: String, vcf: Path, idx: Path)
+    ref: String
 
     output:
-    tuple val(dbname), path("*.snp.vcf"), path("*.snp.vcf.idx")
+    db_vcf = tuple(dbname, file("*.snp.vcf"), file("*.snp.vcf.idx"))
 
     script:
     """
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" \
         SelectVariants --select-type-to-include SNP \
         -R ${ref} -V ${vcf} -O ${dbname}.snp.vcf
     """
@@ -466,20 +483,19 @@ process GATK_SELECT_VARIANTS {
 
 process GATK_VARIANT_FILTRATION {
     tag "${dbname}"
-    publishDir "${params.outdir}/hardfilt"
 
     input:
-    tuple val(dbname), path(vcf), path(idx)
-    val ref
+    tuple(dbname: String, vcf: Path, idx: Path)
+    ref: String
 
     output:
-    tuple val(dbname), path("*.snp.hardfilt.vcf"), path("*.snp.hardfilt.vcf.idx")
+    tuple(dbname, file("*.snp.hardfilt.vcf"), file("*.snp.hardfilt.vcf.idx"))
 
     script:
     def filter_str = ''
-    params.hard_filters.each { filter_str += " -filter \"${it.filter}\" --filter-name \"${it.name}\" " }
+    params.hard_filters.each { filt -> filter_str += " -filter \"${filt.filter}\" --filter-name \"${filt.name}\" " }
     """
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" VariantFiltration \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" VariantFiltration \
     ${filter_str} \
 	-R ${ref} \
 	-V ${vcf} \
@@ -490,7 +506,7 @@ process GATK_VARIANT_FILTRATION {
     """ touch ${dbname}.snp.hardfilt.vcf{,.idx}"""
 }
 
-def get_vqsr_resources(resources) {
+def get_vqsr_resources(resources) -> String {
     def str = ''
     resources.each { it ->
         def type_str = ''
@@ -518,19 +534,19 @@ process GATK_VARIANT_RECALIBRATOR {
     tag "${dbname}"
 
     input:
-    tuple val(dbname), path(vcf), path(idx)
-    val resources
-    val opts
-    val mode
-    val ref
+    tuple(dbname: String, vcf: Path, idx: Path)
+    resources: Map<String, String>
+    opts: String
+    mode: String
+    ref: String
 
     output:
-    tuple val(dbname), path("*.recal.vcf"), path("*.tranches")
+    recalvcf = tuple(dbname, file("*.recal.vcf"), file("*.tranches"))
 
     script:
     def resources_str = get_vqsr_resources(resources)
     """
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" VariantRecalibrator \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" VariantRecalibrator \
         -R ${ref} -V ${vcf} ${resources_str} ${opts} -mode ${mode} \
         -O ${dbname}.recal.vcf --tranches-file ${dbname}.all.tranches
     """
@@ -539,21 +555,21 @@ process GATK_VARIANT_RECALIBRATOR {
     """ touch ${dbname}.recal.vcf  ${dbname}.all.tranches """
 }
 process GATK_APPLY_VQSR {
-    publishDir "${params.outdir}/vqsrfilt"
+    // publishDir "${params.outdir}/vqsrfilt"
     tag "${dbname}"
 
     input:
-    tuple val(dbname), path(vcf), path(vcf_idx), path(recal), path(tranches)
-    val mode
-    val ref
+    tuple(dbname: String, vcf: Path, vcf_idx: Path, recal: Path, tranches: Path)
+    mode: String
+    ref: String
 
     output:
-    tuple val(dbname), path("*.vqsrfilt.*.vcf")
+    tuple(dbname, file("*.vqsrfilt.*.vcf"))
 
     script:
     """
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" IndexFeatureFile -I ${recal}
-    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.giga}G" ApplyVQSR \
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" IndexFeatureFile -I ${recal}
+    gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir} -Xmx${task.memory.toGiga()}G" ApplyVQSR \
         -R ${ref} -V ${vcf} --recal-file ${recal} --tranches-file ${tranches} -mode ${mode} \
         --output ${dbname}.vqsrfilt.${mode}.vcf
     """
@@ -564,23 +580,26 @@ process GATK_APPLY_VQSR {
 
 workflow {
 
+    main:
+
     // print key parameters
     print_parameters()
 
     // Get paths
+    // Not use String instead Path type so that associated files can be corrected found
     def paths = [:]
     paths.parasite = [
-        fasta: file(params.parasite.fasta),
-        fasta_prefix: file(params.parasite.fasta_prefix),
+        fasta: file(params.parasite.fasta).toUriString(),
+        fasta_prefix: file(params.parasite.fasta_prefix).toUriString(),
     ]
     paths.host = [fasta: [], fasta_prefix: []]
-    params.host.fasta.each { it -> paths.host.fasta.add(file(it)) }
-    params.host.fasta_prefix.each { it -> paths.host.fasta_prefix.add(file(it)) }
+    params.host.fasta.each { it -> paths.host.fasta.add(file(it).toUriString()) }
+    params.host.fasta_prefix.each { it -> paths.host.fasta_prefix.add(file(it).toUriString()) }
     paths.concat = [fasta: [], fasta_prefix: []]
-    params.concat.fasta.each { it -> paths.concat.fasta.add(file(it)) }
-    params.concat.fasta_prefix.each { it -> paths.concat.fasta_prefix.add(file(it)) }
+    params.concat.fasta.each { it -> paths.concat.fasta.add(file(it).toUriString()) }
+    params.concat.fasta_prefix.each { it -> paths.concat.fasta_prefix.add(file(it).toUriString()) }
     paths.known_sites = []
-    params.known_sites.each { it -> paths.known_sites.add(file(it)) }
+    params.known_sites.each { it -> paths.known_sites.add(file(it).toUriString()) }
 
     // prepare tmpdir for gatk
     def tmpdir = file(params.gatk_tmpdir)
@@ -588,127 +607,257 @@ workflow {
         tmpdir.mkdirs()
     }
 
+    // group read pairs if there are
+    ch_read_pairs = channel.fromPath(params.fq_map)
+        .flatMap { csv -> csv.splitCsv(skip: 1, sep: '\t') }
+        .map { row ->
+            def fields = row as List<?>
+            tuple(
+                tuple(fields[0].toString(), fields[1].toInteger(), fields[2].toString()),
+                fields[4].toString(),
+            )
+        }
+        .groupBy()
+        .map { key, fq_unsorted ->
+            def (sample, host_id, run) = key
+            def fq = fq_unsorted.toSorted()
+            assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
+            tuple(sample, host_id, run, fq)
+        }
+
     if (params.use_concat_genome) {
         // Prepare input chanel
-        input_ch = channel.fromPath(params.fq_map)
-            | splitCsv(skip: 1, sep: '\t')
-            | groupTuple(by: [0, 1, 2], sort: true)
-            | map { sample, host_id, run, _mate_id, fq ->
-                assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
-                def meta = [:]
-                meta.Sample = sample
-                meta.Run = run
-                meta.Concat_ref_prefix = paths.concat.fasta_prefix[host_id.toInteger()]
-                meta.Parasite_ref_prefix = paths.parasite.fasta_prefix
-                meta.is_paired = fq.size() == 2 ? 1 : 0
-                def fq_paths = []
-                fq.each { it -> fq_paths.add(file(it)) }
-                return [meta, fq_paths]
-            }
-        input_ch | BOWTIE2_ALIGN_TO_CONCAT_GENOME
-        BOWTIE2_ALIGN_TO_CONCAT_GENOME.out.parasite_bam | SAMTOOLS_FASTQ
+        // csv contains sample, host_id, run, mate_id, fq_path
+        input_ch = ch_read_pairs.map { sample, host_id, run, fq ->
+            def meta = record(
+                Sample: sample,
+                Run: run,
+                Concat_ref_prefix: paths.concat.fasta_prefix[host_id.toInteger()],
+                Parasite_ref_prefix: paths.parasite.fasta_prefix,
+                is_paired: fq.size() == 2 ? 1 : 0,
+            )
+            def fq_paths = fq.collect { it -> file(it) }
+            return tuple(meta, fq_paths)
+        }
+        out_BOWTIE2_ALIGN_TO_CONCAT_GENOME = BOWTIE2_ALIGN_TO_CONCAT_GENOME(input_ch)
+        out_SAMTOOLS_FASTQ = SAMTOOLS_FASTQ(
+            out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> tuple(rec.meta, rec.parasite_bam) }
+        )
+
+
+        /// for report
+        rp_flagstat_raw = out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> tuple(rec.meta, rec.flagstat) }
+        rp_readlen_raw = out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> tuple(rec.meta, rec.read_length) }
     }
     else {
         // Prepare input chanel
-        input_ch = channel.fromPath(params.fq_map)
-            | splitCsv(skip: 1, sep: '\t')
-            | groupTuple(by: [0, 1, 2], sort: true)
-            | map { sample, host_id, run, _mate_id, fq ->
-                assert (fq.size() == 1) || (fq.size() == 2) : "number of fq files for each run can only be 1 or 2! Found ${fq.size()} for ${sample}/${run}\n"
-                def meta = [:]
-                meta.Sample = sample
-                meta.Run = run
-                meta.Host_ref_prefix = paths.host.fasta_prefix[host_id.toInteger()]
-                meta.is_paired = fq.size() == 2 ? 1 : 0
-                def fq_paths = []
-                fq.each { it -> fq_paths.add(file(it)) }
-                return [meta, fq_paths]
-            }
+        // csv contains sample, host_id, run, mate_id, fq_path
+        input_ch = ch_read_pairs.map { sample, host_id, run, fq ->
+            def meta = record(
+                Sample: sample,
+                Run: run,
+                Host_ref_prefix: paths.host.fasta_prefix[host_id.toInteger()],
+                is_paired: fq.size() == 2 ? 1 : 0,
+            )
+            def fq_paths = fq.collect { it -> file(it) }
+            return tuple(meta, fq_paths)
+        }
 
         // Remove reads mapped to host and split unmapped to fastq files
-        input_ch | BOWTIE2_ALIGN_TO_HOST
-        BOWTIE2_ALIGN_TO_HOST.out.bam | SAMTOOLS_VIEW_RM_HOST_READS | SAMTOOLS_FASTQ
+        out_BOWTIE2_ALIGN_TO_HOST = BOWTIE2_ALIGN_TO_HOST(input_ch)
+        out_SAMTOOLS_VIEW_RM_HOST_READS = SAMTOOLS_VIEW_RM_HOST_READS(out_BOWTIE2_ALIGN_TO_HOST.map { rec -> tuple(rec.meta, rec.bam) })
+        out_SAMTOOLS_FASTQ = SAMTOOLS_FASTQ(out_SAMTOOLS_VIEW_RM_HOST_READS)
+
+        /// for report
+        rp_flagstat_raw = out_BOWTIE2_ALIGN_TO_HOST.map { rec -> tuple(rec.meta, rec.flagstat) }
+        rp_readlen_raw = out_BOWTIE2_ALIGN_TO_HOST.map { rec -> tuple(rec.meta, rec.read_length) }
     }
 
-    ch_parasite_reads = SAMTOOLS_FASTQ.out
+    ch_parasite_reads = out_SAMTOOLS_FASTQ
     if (params.parasite_reads_only) {
         ch_parasite_reads = channel.empty()
     }
+
+    /// for report
+    rp_parasite_reads = ch_parasite_reads.flatMap { meta, fq_lst -> fq_lst.withIndex().collect { fq, idx -> tuple(meta, idx + 1, fq) } }
+
     // Align to parasite genome
-    BOWTIE2_ALIGN_TO_PARASITE(ch_parasite_reads, paths.parasite.fasta_prefix)
+    out_BOWTIE2_ALIGN_TO_PARASITE = BOWTIE2_ALIGN_TO_PARASITE(ch_parasite_reads, paths.parasite.fasta_prefix)
+    /// for report
+    rp_flagstat_parasite = out_BOWTIE2_ALIGN_TO_PARASITE.map { rec -> tuple(rec.meta, rec.flagstat) }
 
     // Non-blocking grouped gathering
+    // csv contains sample, host_id, run, mate_id, fq_path
     n_run = channel.fromPath(params.fq_map)
-        | splitCsv(skip: 1, sep: '\t')
-        | map { sample, _host_id, run, _mate_id, _fq -> [sample, run] }
-        | unique
-        | groupTuple
-        | map { sample, runs -> [sample, runs.size()] }
+        .flatMap { csv -> csv.splitCsv(skip: 1, sep: '\t') }
+        .map { row ->
+            def fields = row as List<?>
+            // sample, run
+            tuple(fields[0].toString(), fields[2].toString())
+        }
+        .unique()
+        .groupBy()
+        .map { sample, runs ->
+            record(sample: sample, num: runs.size())
+        }
 
-    merge_input = BOWTIE2_ALIGN_TO_PARASITE.out.bam
-        | map { meta, bam -> [meta.Sample, bam] }
-        | combine(n_run, by: 0)
-        | map { sample, bam, sz -> [groupKey(sample, sz), bam] }
-        | groupTuple
+    merge_input = out_BOWTIE2_ALIGN_TO_PARASITE.map { rec -> record(sample: rec.meta.Sample, bam: rec.bam) }.join(n_run, by: "sample").map { rec -> tuple(rec.sample, rec.num, rec.bam) }.groupBy()
 
     // For each sample, merge and sort bam files of different runs 
-    merge_input | PICARD_MERGE_SORT_BAMS | PICARD_MARK_DUPLICATES
+    out_PICARD_MERGE_SORT_BAMS = PICARD_MERGE_SORT_BAMS(merge_input)
+
+    out_PICARD_MARK_DUPLICATES = PICARD_MARK_DUPLICATES(out_PICARD_MERGE_SORT_BAMS)
 
     // Base recalibration
-    GATK_BASE_RECALIBRATOR(PICARD_MARK_DUPLICATES.out, paths.parasite.fasta, paths.known_sites)
-    GATK_APPLY_BQSR(GATK_BASE_RECALIBRATOR.out, paths.parasite.fasta)
+    out_GATK_BASE_RECALIBRATOR = GATK_BASE_RECALIBRATOR(out_PICARD_MARK_DUPLICATES, paths.parasite.fasta, paths.known_sites)
+    out_GATK_APPLY_BQSR = GATK_APPLY_BQSR(out_GATK_BASE_RECALIBRATOR, paths.parasite.fasta)
+
+    rp_recal_bam = out_GATK_APPLY_BQSR
 
     // Generate stat files
-    BEDTOOLS_GENOMECOV(GATK_APPLY_BQSR.out, paths.parasite.fasta)
-    SAMTOOLS_FLAGSTAT(GATK_APPLY_BQSR.out)
+    out_BEDTOOLS_GENOMECOV = BEDTOOLS_GENOMECOV(out_GATK_APPLY_BQSR, paths.parasite.fasta)
+    rp_recal_bam_coverage = out_BEDTOOLS_GENOMECOV
+
+    out_SAMTOOLS_FLAGSTAT = SAMTOOLS_FLAGSTAT(out_GATK_APPLY_BQSR)
+    rp_recal_bam_flagstat = out_SAMTOOLS_FLAGSTAT
 
     // stop before GATK_HAPLOTYPE_CALLER if only coverage inforation is need
+    def ch_bqsr_bam: Channel<Tuple<String, Path>>
     if (params.coverage_only) {
-        ch_bqsr_bam = channel.empty()
+        ch_bqsr_bam = channel.fromList([])
     }
     else {
-        ch_bqsr_bam = GATK_APPLY_BQSR.out
+        ch_bqsr_bam = out_GATK_APPLY_BQSR
     }
 
     // Generate gvcf
-    GATK_HAPLOTYPE_CALLER(ch_bqsr_bam, paths.parasite.fasta)
+    out_GATK_HAPLOTYPE_CALLER = GATK_HAPLOTYPE_CALLER(ch_bqsr_bam, paths.parasite.fasta)
 
-    if (!params.gvcf_only) {
-        // Collect information to make gvcf_map file
-        gvcf_map_ch = GATK_HAPLOTYPE_CALLER.out
-            | map { sample, gvcf, _idx -> "${sample}\t${gvcf}" }
-            | collectFile(name: "gvcf_map.txt", newLine: true, sort: true)
-            | first
+    rp_gvcf = out_GATK_HAPLOTYPE_CALLER
 
-        // Import gvcf files to genomicsdb
-        interval_ch = channel.fromList(params.genome_intervals[params.split])
-        GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch)
 
-        // Genotype gvcf genomics db
-        GATK_GENOTYPE_GVCFS(GATK_GENOMICS_DB_IMPORT.out, paths.parasite.fasta)
+    if (params.gvcf_only) {
+        // this will stop any steps after haplotype caller 
+        out_GATK_HAPLOTYPE_CALLER = channel.empty()
+    }
 
-        // Select SNP only
-        GATK_SELECT_VARIANTS(GATK_GENOTYPE_GVCFS.out, paths.parasite.fasta)
-
-        // Hard filtering and Keep 'PASS' variants
-        if (params.hard == true) {
-            GATK_VARIANT_FILTRATION(GATK_SELECT_VARIANTS.out, paths.parasite.fasta)
+    // Collect information to make gvcf_map file
+    gvcf_map_ch = out_GATK_HAPLOTYPE_CALLER
+        .map { sample, gvcf, _idx -> "${sample}\t${gvcf}" }
+        .collect()
+        .map { lines ->
+            def out_file = file("gvcf_map.txt")
+            out_file.text = lines.toSorted().join("\n") + "\n"
+            return out_file
         }
 
-        // VQSR variant filtering
-        if (params.vqsr == true) {
-            GATK_VARIANT_RECALIBRATOR(
-                GATK_SELECT_VARIANTS.out,
-                params.vqsr_resources,
-                params.vqsr_opts,
-                params.vqsr_mode,
-                paths.parasite.fasta,
-            )
-            GATK_APPLY_VQSR(
-                GATK_SELECT_VARIANTS.out.combine(GATK_VARIANT_RECALIBRATOR.out, by: 0),
-                params.vqsr_mode,
-                paths.parasite.fasta,
-            )
+    // Import gvcf files to genomicsdb
+    def interval_ch: Channel<String>
+    interval_ch = channel.fromList(params.genome_intervals[params.split])
+    out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch)
+
+    // Genotype gvcf genomics db
+    out_GATK_GENOTYPE_GVCFS = GATK_GENOTYPE_GVCFS(out_GATK_GENOMICS_DB_IMPORT, paths.parasite.fasta)
+
+    // Select SNP only
+    out_GATK_SELECT_VARIANTS = GATK_SELECT_VARIANTS(out_GATK_GENOTYPE_GVCFS, paths.parasite.fasta)
+
+    // Hard filtering and Keep 'PASS' variants
+    def rp_hardfilt_vcf: Channel<Tuple<String, Path, Path>> = channel.fromList([])
+    if (params.hard == true) {
+        out_GATK_VARIANT_FILTRATION = GATK_VARIANT_FILTRATION(out_GATK_SELECT_VARIANTS, paths.parasite.fasta)
+        rp_hardfilt_vcf = out_GATK_VARIANT_FILTRATION
+    }
+
+    // VQSR variant filtering
+    def rp_vqsrfilt_vcf: Channel<Tuple<String, Path>> = channel.empty()
+    if (params.vqsr == true) {
+        out_GATK_VARIANT_RECALIBRATOR = GATK_VARIANT_RECALIBRATOR(
+            out_GATK_SELECT_VARIANTS,
+            params.vqsr_resources,
+            params.vqsr_opts,
+            params.vqsr_mode,
+            paths.parasite.fasta,
+        )
+        out_GATK_APPLY_VQSR = GATK_APPLY_VQSR(
+            out_GATK_SELECT_VARIANTS.map { dbname, vcf, vcf_idx -> record(dbname: dbname, vcf: vcf, vcf_idx: vcf_idx) }.join(
+                out_GATK_VARIANT_RECALIBRATOR.map { dbname, recal, tranches ->
+                    record(dbname: dbname, recal: recal, tranches: tranches)
+                },
+                by: "dbname"
+            ).map { rec -> tuple(rec.dbname, rec.vcf, rec.vcf_idx, rec.recal, rec.tranches) },
+            params.vqsr_mode,
+            paths.parasite.fasta,
+        )
+
+        rp_vqsrfilt_vcf = out_GATK_APPLY_VQSR
+    }
+
+    publish:
+    rp_flagstat_raw       = rp_flagstat_raw
+    rp_readlen_raw        = rp_readlen_raw
+    rp_parasite_reads     = rp_parasite_reads
+    rp_flagstat_parasite  = rp_flagstat_parasite
+    rp_recal_bam          = rp_recal_bam
+    rp_recal_bam_coverage = rp_recal_bam_coverage
+    rp_recal_bam_flagstat = rp_recal_bam_flagstat
+    rp_gvcf               = rp_gvcf
+    rp_hardfilt_vcf       = rp_hardfilt_vcf
+    rp_vqsrfilt_vcf       = rp_vqsrfilt_vcf
+}
+
+output {
+    rp_flagstat_raw {
+        path { meta, flagstat ->
+            flagstat >> "flagstat_raw/${meta.Sample}~${meta.Run}_flagstat.txt"
+        }
+    }
+    rp_readlen_raw {
+        path { meta, readlen ->
+            readlen >> "readlen_raw/${meta.Sample}~${meta.Run}_readlen.txt"
+        }
+    }
+    rp_parasite_reads {
+        path { meta, idx, fq ->
+            fq >> "parasite_reads/${meta.Sample}~${meta.Run}_r${idx}.fq.gz"
+        }
+    }
+    rp_flagstat_parasite {
+        path { meta, path ->
+            path >> "flagstat_parasite/${meta.Sample}~${meta.Run}_flagstat.txt"
+        }
+    }
+    rp_recal_bam {
+        path { sample, bam ->
+            bam >> "recalibrated/${sample}_recal.bam"
+        }
+    }
+    rp_recal_bam_coverage {
+        path { rec ->
+            rec.bedgraph >> "recal_bam_coverage/${rec.sample}.BedGraph.gz"
+            rec.summary >> "recal_bam_coverage/${rec.sample}.summary.txt"
+        }
+    }
+    rp_recal_bam_flagstat {
+        path { sample, flagstat ->
+            flagstat >> "recal_bam_flagstat/${sample}_flagstat.txt"
+        }
+    }
+    rp_gvcf {
+        path { sample, vcf, idx ->
+            vcf >> "gvcf/${sample}.g.vcf"
+            idx >> "gvcf/${sample}.g.vcf.idx"
+        }
+    }
+    rp_hardfilt_vcf {
+        path { dbname, vcf, idx ->
+            vcf >> "hardfilt_vcf/${dbname}.hardfilt.vcf"
+            idx >> "hardfilt_vcf/${dbname}.hardfilt.vcf.idx"
+        }
+    }
+    rp_vqsrfilt_vcf {
+        path { dbname, vcf ->
+            vcf >> "vqsrfilt_vcf/${dbname}.vqsr.vcf"
         }
     }
 }

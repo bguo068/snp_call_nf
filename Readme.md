@@ -51,7 +51,16 @@ conda env create -f env/nf.yaml
 conda env create -f env/snp_call_nf.yaml
 ```
 
-NOTE: if apptainer is prefered over conda, see `env/README.md` for instructions.
+NOTE: 
+1. If Apptainer is preferred over Conda for the pipeline, see `env/README.md` for instructions.
+2. If you already have a running Nextflow in your system but with a different version, you can try the following to AVOID creating a Conda environment just for the Nextflow engine of the right version:
+```sh
+nextflow self-update
+export NXF_VER=26.04.6
+nextflow main.nf [args]
+```
+
+
 
 # How to run the pipeline?
 

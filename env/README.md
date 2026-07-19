@@ -154,6 +154,8 @@ nextflow main.nf \
 
 mkdir -p tmpdir
 nextflow main.nf -without-conda  --with-apptainer  -profile apptainer,standard 
+# or 
+# nextflow main.nf -without-conda  --with-apptainer  -profile apptainer,slurm 
 ```
 
 

@@ -13,7 +13,6 @@ filtering:
 \thard:\t ${params.hard}
 \tvqsr:\t ${params.vqsr}
 use_concat_genome: ${params.use_concat_genome}
-outdir:\t${params.outdir}
 tmpdir:\t${params.gatk_tmpdir}
 parasite_reads_only:\t${params.parasite_reads_only}
 coverage_only:\t ${params.coverage_only}

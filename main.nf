@@ -531,7 +531,7 @@ process GATK_VARIANT_RECALIBRATOR {
 
     input:
     tuple(dbname: String, vcf: Path, idx: Path)
-    resources: Map<String, String>
+    resources: List<Map<String, String>>
     opts: String
     mode: String
     ref: String
@@ -766,7 +766,7 @@ workflow {
 
     // VQSR variant filtering
     def rp_vqsrfilt_vcf: Channel<Tuple<String, Path>> = channel.empty()
-    if (params.vqsr == true) {
+    if (params.vqsr) {
         out_GATK_VARIANT_RECALIBRATOR = GATK_VARIANT_RECALIBRATOR(
             out_GATK_SELECT_VARIANTS,
             params.vqsr_resources,

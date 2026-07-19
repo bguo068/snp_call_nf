@@ -1,80 +1,145 @@
 # snp_call_nf
 
-The pipeline is designed to perform joint variant calling on large Plasmodium
-Whole Genome Sequencing (WGS) datasets. It follows `GATK` best practices and the
-[MalariaGEN Pf6 data-generating
-methods](<(https://ngs.sanger.ac.uk//production/malaria/pfcommunityproject/Pf6/Pf_6_extended_methods.pdf)>).
-Briefly, raw reads are first mapped to the human GRCh38 reference genome to
-remove host reads, with the remaining reads being mapped to the Pf3D7 reference
-genome (PlasmoDB_44). The mapped reads are then processed using `GATK`'s
-`MarkDuplicates` and `BaseRecalibrator` tools. Following this, analysis-ready
-mapped reads for each isolate are used to generate per-sample calls
-(`HaplotypeCaller` /GVCF mode). These per-sample calls are combined and run
-through a joint-call step (`GenotypeGVCFs`) to obtain unfiltered multi-sample
-VCFs. A machine learning-based variant filtration strategy (VQSR via `GATK`'s
-`VariantRecalibrator`), or/and hard-filteration strategy, can then be used to
-retain high-quality variants.
+Nextflow pipeline for joint variant calling on *Plasmodium* Whole Genome Sequencing (WGS) datasets.
 
-The `main` branch of the repository is employed for _Plasmodium falciparum_.
-However, the pipeline is expected to work with other _Plasmodium_ species,
-provided the corresponding configuration and reference files are given (See
-nextflow.config). A separate `vivax` branch with configuration and reference
-files for _Plasmodium vivax_ under development and can be checked with the
-[link](https://github.com/bguo068/snp_call_nf/tree/vivax).
+---
 
-# Software environtment
+## Table of Contents
 
-The pipeline has been tested on MacOS and Linux system. The software
-dependencies (including the version numbers of used software) are defined within the
-`env/nf.yaml` Conda recipe (for Nextflow engine) and the `env/snp_call_nf.yaml`
-Conda recipe (for the pipeline itself). Installtion instruction is listed below.
-The estimated time of instation is about 5-20 minutes.
+1. [Overview](#overview)
+2. [Software Environment & Installation](#software-environment--installation)
+3. [Quick Start: Test the Pipeline](#quick-start-test-the-pipeline)
+4. [Running on Your Own Data](#running-on-your-own-data)
+5. [Pipeline Options](#pipeline-options)
+6. [Input & Output Files](#input--output-files)
+7. [Debugging](#debugging)
+8. [Workflow Chart](#workflow-chart)
+9. [Citations](#citations)
 
-1. Change to a working folder that is large enough to store the snp call result
-   files. Git clone the pipeline and change directory to the pipeline folder
+---
+
+## Overview
+
+The pipeline follows [GATK best practices](https://gatk.broadinstitute.org/hc/en-us/articles/360035535932-Germline-short-variant-discovery-SNPs-Indels) and the [MalariaGEN Pf6 data-generating methods](https://ngs.sanger.ac.uk//production/malaria/pfcommunityproject/Pf6/Pf_6_extended_methods.pdf).
+
+**Pipeline steps:**
+
+1. **Host read removal** — Raw reads are mapped to the human GRCh38 reference genome; aligning reads are discarded.
+2. **Parasite alignment** — Remaining reads are mapped to the *P. falciparum* 3D7 reference (PlasmoDB_44).
+3. **BAM processing** — `MarkDuplicates` and `BaseRecalibrator` (GATK) produce analysis-ready BAMs.
+4. **Per-sample calling** — `HaplotypeCaller` in GVCF mode generates per-isolate variant calls.
+5. **Joint calling** — Per-sample GVCFs are combined via `GenotypeGVCFs` into a multi-sample VCF.
+6. **Variant filtration** — Hard-filtering or VQSR (`VariantRecalibrator`) retains high-quality variants.
+
+### Species support
+
+The `main` branch targets **_Plasmodium falciparum_**. The pipeline is expected to work with other *Plasmodium* species when the appropriate configuration and reference files are provided (see `nextflow.config`).
+
+A `vivax` branch for **_Plasmodium vivax_** is under development: [vivax branch](https://github.com/bguo068/snp_call_nf/tree/vivax).
+
+---
+
+## Software Environment & Installation
+
+**Supported platforms:** macOS (Intel) and Linux.  
+**Estimated install time:** 5–20 minutes.
+
+The Nextflow engine and the pipeline may require different Java versions. Two separate Conda environments are used to avoid conflicts:
+- `env/nf.yaml` — Nextflow engine
+- `env/snp_call_nf.yaml` — Pipeline tools
+
+### Step 1: Clone the repository
 
 ```sh
-cd YOUR_WORKING_DIR # replace `YOUR_WORKING_DIR` with your real path
+cd YOUR_WORKING_DIR          # replace with your actual path
 git clone https://github.com/bguo068/snp_call_nf.git
 cd snp_call_nf
 ```
 
-2. Install conda from [here](https://docs.conda.io/en/latest/miniconda.html) if you have not
-3. Install the `nf` and the `snp_call_nf` conda environments
+### Step 2: Install Conda (if needed)
+
+Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+
+### Step 3: Create the Conda environments
 
 ```sh
-# NOTE: The nextflow engine and the pipeline may need different version of java.
-# We use two different Conda environments to address the conflict.
-# install nextflow
+# Install Nextflow environment
 conda env create -f env/nf.yaml
-# install snp_call_nf
+
+# Install pipeline environment
 conda env create -f env/snp_call_nf.yaml
 ```
 
-# How to run the pipeline?
+> **Note:** If you already have Nextflow installed, you can skip the `nf` environment and pin the version directly:
+> ```sh
+> nextflow self-update
+> export NXF_VER=26.04.6
+> nextflow main.nf [args]
+> ```
 
-1. Link the reference files (internal users) or prepare them by yourself
-   (**external** users)
+> **Apptainer/Singularity users:** See [`env/README.md`](env/README.md) for container-based setup instructions.
 
-- Link the ref files on IGS server
+---
 
+## Quick Start: Test the Pipeline
+
+A tiny test dataset is included in the `test_data/` folder. Use it to verify your installation works.
+
+### Local / HPC (single node)
+
+```sh
+conda activate nf
+nextflow main.nf
 ```
-ln -s /local/projects-t3/toconnor_grp/bing.guo/ref/* ref/
+
+To test with VQSR enabled:
+
+```sh
+conda activate nf
+nextflow main.nf --vqsr true -profile standard,test
 ```
 
-or
+### SGE cluster
 
-```
-ln -s /local/projects-t2/CVD/Takala-Harrison/Cambodia_Bing/ref/* ref/
-```
-
-- Link the ref files on Rosalind, the reference file can be linked by running
-
-```
-ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/
+```sh
+conda activate nf
+nextflow main.nf -profile sge
 ```
 
-- Prepare ref file by yourself:
+### Slurm cluster
+
+```sh
+conda activate nf
+nextflow main.nf -profile slurm
+```
+
+### Larger test dataset (ENA downloads)
+
+To test with real (but public) ENA data:
+
+```sh
+cd ena_data
+bash download_ena_data.sh      # may take hours to download
+cd ..
+conda activate nf
+nextflow main.nf --fq_map ena_data/ena_fastq_map.tsv
+```
+
+---
+
+## Running on Your Own Data
+
+### 1. Prepare reference files
+
+**Internal users (IGS / Rosalind):** Symlink existing reference files.
+
+| Server    | Command                                                                  |
+|-----------|--------------------------------------------------------------------------|
+| IGS       | `ln -s /local/projects-t3/toconnor_grp/bing.guo/ref/* ref/`             |
+| IGS (alt) | `ln -s /local/projects-t2/CVD/Takala-Harrison/Cambodia_Bing/ref/* ref/` |
+| Rosalind  | `ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/` |
+
+**External users:** Generate reference files from scratch.
 
 ```sh
 cd ref
@@ -84,82 +149,129 @@ conda deactivate
 cd ..
 ```
 
-2. Run the pipeline
-   - Test it on HPC (local): `conda activate nf; nextflow main.nf`
-     - This will use a tiny **test dataset** from `test_data` folder
-     - To test on a larger **test data**, please run `cd ena_data;
-ena_data/download_ena_data.sh` (it may take hours to download all the
-       real data from ENA). Once downloaded, change directory to project folder
-       (where `main.nf` is located) by run `cd ..`, and the pipeline can be run
-       with `conda activate nf; nextflow main.nf --fq_map
-ena_data/ena_fastq_map.tsv`
-   - Test it on SGE server: `conda activate nf; nextflow main.nf -profile sge`
-     - This will use a small dataset from `test_data` folder
-   - Test it on Slurm server: similar to SGE server, but use `-profile slurm`
-   - For working with your own data (not test data), you will need to edit `fastq_map.tsv` file to include the raw
-     reads(`fastq.gz` files) of your own samples. If using a SGE or Slurm cluster, toggle the
-     corresponding profile as needed, e.g.: `conda activate nf; nextflow main.nf -profile slurm --fq_map [your_fq_map.tsv]`
+### 2. Prepare your sample sheet
 
-## Optional arguments
+Edit `fastq_map.tsv` (or create a new one) with your sample information.  
+See [fastq_map.tsv](fastq_map.tsv) for an example.  
+The file is **tab-delimited** with five columns:
 
-3. Split chromosomes to better parallelize joint call:
+| Column   | Type    | Description                                                          |
+|----------|---------|----------------------------------------------------------------------|
+| Sample   | string  | Unique sample identifier                                             |
+| HostId   | integer | Host genome index (0-based); see `params.host` in `nextflow.config`  |
+| Run      | string  | Run / replicate identifier (e.g. `r1`)                               |
+| MateId   | integer | `0` for single-end; `1` or `2` for paired-end                        |
+| Fastq    | string  | Path to the FASTQ file                                               |
 
-   - by default, the genome is split by chromosomes
-   - you can specify cmd line option `--split intervals` to split the chromosome into more
-     intervals.
+### 3. Run the pipeline
 
-4. Enable `vqsr` variant filtering. By default, `vqsr` is not enabled. To enable
-   this option, you can specify `--vqsr true` to the nextflow command line
+```sh
+conda activate nf
+nextflow main.nf --fq_map your_fastq_map.tsv -profile slurm
+```
 
-There are options to run parts of the pipeline:
+Replace `-profile slurm` with `-profile sge` or omit it for local execution.
 
-- If `--use_concat_genome` is specified, a less aggressive host read -filtering
-method is used. By default, raw reads are first aligned to the human genome and
-any reads that align are removed before remapping to the parasite genome. When
-`--use_concat_genome` is used, raw reads are first aligned to a concatenated
-(pseudo) genome containing both the human and parasite references. Reads that
-align to parasite chromosomes are retained and then realigned to the parasite
-genome; reads aligning to human chromosomes are ignored.
-- If `--parasite_reads_only` is specified, the pipeline will stop after host
-  reads are removed and the remaining reads are saved to FQ files.
-- If `--coverage_only` is specified, the pipeline will stop after completing
-  the necessary steps to produce the reads coverage, before the GATK_APPLY_BQSR
-  process.
-- If `--gvcf_only` is specified, the pipeline will stop after generating
-  per-sample gVCF files.
+> **Before running on a cluster**, edit `nextflow.config` to match your lab's settings:
+> - **SGE:** eg., update `clusterOptions = "-P toconnor-lab -cwd -V"`
+> - **Slurm:** eg., update `clusterOptions = "--account=cvd"`
 
-# Important input and output files
+---
 
-1. Main input file is `./fastq_map.tsv`
-   - Five columns delimited by tab: string, interger, string, interger, string
-   - `HostId` is the index of host genomes from 0, see `params.host` in nextflow.config file
-   - `MateId` can be 0 for single-end sequencing, or 1 and 2 for pair-end sequencing
-2. Main configureation file is `./nextflow.config`
-   - For SEG users, be sure to edit sge config about `clusterOptions = "-P toconnor-lab -cwd -V"` to reflect your lab specifc sge qsub option
-3. Main pipeline script is `./main.nf`
-4. Main output files/folders:
-   - `result/read_length` folder: report the raw read length for each samples/runs
-   - `result/flagstat_host` and `result/flagstat_parasite`: flagstat of
-     aligned reads (aligned with host genome and parasite genome respectively)
-   - `result/recalibrated`: analysis ready bam files
-   - `result/coverage`: read converage based on the analysis-ready bam files
-   - `result/flagstat`: bam flatstat based on the analysis-ready bam files
-   - `result/gvcf`: single-sample vcf files
-   - `result/hardfilt`: multiple-sample (joint-call) vcf files with hard filterating annotations
-   - `result/vqsrfilt`: multiple-sample (joint-call) vcf files with vqsr-based filterating annotations.
-     You can decide to use one of these, `result/hardfilt` and `result/vqsrfilt`.
+## Pipeline Options
 
-# Workflow chart
+### Variant filtration
 
-![flowchar](./flowchart.png)
+| Flag          | Default | Description                                        |
+|---------------|---------|----------------------------------------------------|
+| `--vqsr true` | off     | Enable VQSR-based variant filtration               |
 
-# Citations
+If VQSR fails due to convergence issues, adjust `--vqsr_opts` (see `nextflow.config`).
 
-This pipeline was originally developed for the `posseleff` project.
-If you find this pipeline useful, please consider citing our preprint:
+### Parallelization
 
-> Guo, B., Borda, V., Laboulaye, R., Spring, M. D., Wojnarski, M., Vesely, B. A., Silva, J. C.,
-> Waters, N. C., O'Connor, T. D., & Takala-Harrison, S. (2023). Strong Positive Selection Biases
-> Identity-By-Descent-Based Inferences of Recent Demography and Population Structure in
-> Plasmodium falciparum. bioRxiv : the preprint server for biology, 2023.07.14.549114.
-> https://doi.org/10.1101/2023.07.14.549114
+Control how the genome is divided for parallel joint calling via `--split`. The available intervals are defined in `nextflow.config` under `params.genome_intervals`.
+
+| Value          | Behavior                                                                 |
+|----------------|--------------------------------------------------------------------------|
+| `chromosomes`  | **(default)** One interval per chromosome (14 intervals for *P. falciparum*) |
+| `intervals`    | Sub-chromosomal intervals — splits larger chromosomes for finer-grained parallelism (44 intervals) |
+
+Example:
+
+```sh
+nextflow main.nf --split intervals
+```
+
+### Subset / partial runs
+
+Use these to stop the pipeline at a specific stage:
+
+| Flag                     | Stops after…                                                |
+|--------------------------|-------------------------------------------------------------|
+| `--parasite_reads_only`  | Host read removal — unmapped reads saved to FASTQ           |
+| `--coverage_only`        | Coverage computation — before `GATK_APPLY_BQSR`             |
+| `--gvcf_only`            | Per-sample GVCF generation — before joint calling            |
+
+### Host read filtering method
+
+| Flag                   | Behavior                                                                                              |
+|------------------------|-------------------------------------------------------------------------------------------------------|
+| _(default)_            | Reads are aligned to human genome first; aligning reads are removed before parasite mapping.          |
+| `--use_concat_genome`  | Reads are aligned to a concatenated human+parasite genome. Reads mapping to parasite chromosomes are retained and realigned; human-mapping reads are discarded.  |
+
+---
+
+## Input & Output Files
+
+### Key inputs
+
+| File                | Purpose                                             |
+|---------------------|-----------------------------------------------------|
+| `fastq_map.tsv`     | Sample sheet (see [Running on Your Own Data](#1-prepare-your-sample-sheet)) |
+| `nextflow.config`   | Pipeline configuration (profiles, params, resources) |
+| `main.nf`           | Main Nextflow workflow script                       |
+
+### Key outputs
+
+| Path                              | Description                                              |
+|-----------------------------------|----------------------------------------------------------|
+| `result/readlen_raw/`             | Raw read lengths per sample/run                           |
+| `result/flagstat_raw/`            | Flagstat for host-genome alignments                       |
+| `result/flagstat_parasite/`       | Flagstat for parasite-genome alignments                   |
+| `result/recalibrated/`            | Analysis-ready BAM files (post host-removal & recalibration) |
+| `result/recal_bam_coverage/`      | Read coverage from analysis-ready BAMs                    |
+| `result/recal_bam_flagstat/`      | Flagstat from analysis-ready BAMs                         |
+| `result/gvcf/`                    | Per-sample GVCF files                                     |
+| `result/hardfilt_vcf/`            | Joint-called VCF with hard-filter annotations             |
+| `result/vqsrfilt_vcf/`            | Joint-called VCF with VQSR annotations (only when `--vqsr true` is used) |
+
+You can use either `result/hardfilt_vcf/` or `result/vqsrfilt_vcf/` as your final filter annotated call set.
+
+---
+
+## Debugging
+
+Run a stub workflow to quickly validate workflow logic without executing real jobs:
+
+```sh
+conda activate nf
+NXF_VER=26.04.6 nextflow main.nf -stub --vqsr true -without-conda
+```
+
+---
+
+## Workflow Chart
+
+![flowchart](./flowchart.png)
+
+Note: the VQSR/use concatenated genome features are not shown in the workflow chart.
+
+---
+
+## Citations
+
+This pipeline was originally developed for the `posseleff` project. If you find it useful, please cite:
+
+> Guo, B., Borda, V., Laboulaye, R. et al. Strong positive selection biases identity-by-descent-based inferences of recent demography and population structure in *Plasmodium falciparum*. *Nat Commun* **15**, 2499 (2024).  
+> <https://doi.org/10.1038/s41467-024-46659-0>

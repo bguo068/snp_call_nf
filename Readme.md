@@ -109,7 +109,8 @@ ena_data/ena_fastq_map.tsv`
      intervals.
 
 4. Enable `vqsr` variant filtering. By default, `vqsr` is not enabled. To enable
-   this option, you can specify `--vqsr true` to the nextflow command line
+   this option, you can specify `--vqsr true` to the nextflow command line.
+   - If this step fails due to a convergence issue, parameters such as `vqsr_opts` may need to be tweaked.
 
 There are options to run parts of the pipeline:
 
@@ -136,18 +137,24 @@ genome; reads aligning to human chromosomes are ignored.
    - `MateId` can be 0 for single-end sequencing, or 1 and 2 for pair-end sequencing
 2. Main configureation file is `./nextflow.config`
    - For SEG users, be sure to edit sge config about `clusterOptions = "-P toconnor-lab -cwd -V"` to reflect your lab specifc sge qsub option
+   - For Slurm users, edit cluster options to reflect your lab specific settings, for instance `clusterOptions = "-P toconnor-lab -cwd -V"`
 3. Main pipeline script is `./main.nf`
 4. Main output files/folders:
-   - `result/read_length` folder: report the raw read length for each samples/runs
-   - `result/flagstat_host` and `result/flagstat_parasite`: flagstat of
+   - `result/readlen_raw` folder: report the raw read length for each samples/runs
+   - `result/flagstat_raw` and `result/flagstat_parasite`: flagstat of
      aligned reads (aligned with host genome and parasite genome respectively)
    - `result/recalibrated`: analysis ready bam files
-   - `result/coverage`: read converage based on the analysis-ready bam files
-   - `result/flagstat`: bam flatstat based on the analysis-ready bam files
+   - `result/recal_bam_coverage`: read coverage based on the analysis-ready bam files(after removing host reads) 
+   - `result/recal_bam_flagstat`: bam flatstat based on the analysis-ready bam files (after removing host reads) 
    - `result/gvcf`: single-sample vcf files
-   - `result/hardfilt`: multiple-sample (joint-call) vcf files with hard filterating annotations
-   - `result/vqsrfilt`: multiple-sample (joint-call) vcf files with vqsr-based filterating annotations.
+   - `result/hardfilt_vcf`: multiple-sample (joint-call) vcf files with hard filterating annotations
+   - `result/vqsrfilt_vcf`: multiple-sample (joint-call) vcf files with vqsr-based filterating annotations. This folder will be generated when `--vqsr true` is used.
      You can decide to use one of these, `result/hardfilt` and `result/vqsrfilt`.
+
+# Debug the workflow logic
+```sh
+conda activate nf; NXF_VER=26.04.6 nextflow main.nf -stub --vqsr true -without-conda
+```
 
 # Workflow chart
 
@@ -156,10 +163,9 @@ genome; reads aligning to human chromosomes are ignored.
 # Citations
 
 This pipeline was originally developed for the `posseleff` project.
-If you find this pipeline useful, please consider citing our preprint:
+If you find this pipeline useful, please consider citing our paper:
 
-> Guo, B., Borda, V., Laboulaye, R., Spring, M. D., Wojnarski, M., Vesely, B. A., Silva, J. C.,
-> Waters, N. C., O'Connor, T. D., & Takala-Harrison, S. (2023). Strong Positive Selection Biases
-> Identity-By-Descent-Based Inferences of Recent Demography and Population Structure in
-> Plasmodium falciparum. bioRxiv : the preprint server for biology, 2023.07.14.549114.
-> https://doi.org/10.1101/2023.07.14.549114
+>Guo, B., Borda, V., Laboulaye, R. et al. Strong positive selection biases
+>identity-by-descent-based inferences of recent demography and population
+>structure in Plasmodium falciparum. Nat Commun 15, 2499 (2024).
+>https://doi.org/10.1038/s41467-024-46659-0

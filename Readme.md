@@ -149,7 +149,7 @@ genome; reads aligning to human chromosomes are ignored.
    - `MateId` can be 0 for single-end sequencing, or 1 and 2 for pair-end sequencing
 2. Main configureation file is `./nextflow.config`
    - For SEG users, be sure to edit sge config about `clusterOptions = "-P toconnor-lab -cwd -V"` to reflect your lab specifc sge qsub option
-   - For Slurm users, edit cluster options to reflect your lab specific settings, for instance `clusterOptions = "-P toconnor-lab -cwd -V"`
+   - For Slurm users, edit cluster options to reflect your lab specific settings, for instance `clusterOptions = "--account=cvd"`
 3. Main pipeline script is `./main.nf`
 4. Main output files/folders:
    - `result/readlen_raw` folder: report the raw read length for each samples/runs

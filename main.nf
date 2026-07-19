@@ -281,7 +281,6 @@ process GATK_BASE_RECALIBRATOR {
 
 process GATK_APPLY_BQSR {
     tag "${sample}"
-    publishDir "${params.outdir}/recalibrated"
 
     input:
     tuple(sample: String, bam: Path, recal_table: Path)
@@ -303,7 +302,6 @@ process GATK_APPLY_BQSR {
 
 process BEDTOOLS_GENOMECOV {
     tag "${sample}"
-    publishDir "${params.outdir}/coverage"
 
     input:
     tuple(sample: String, bam: Path)
@@ -366,7 +364,6 @@ process BEDTOOLS_GENOMECOV {
 
 process SAMTOOLS_FLAGSTAT {
     tag "${sample}"
-    publishDir "${params.outdir}/flagstat"
 
     input:
     tuple(sample: String, bam: Path)
@@ -385,7 +382,6 @@ process SAMTOOLS_FLAGSTAT {
 
 process GATK_HAPLOTYPE_CALLER {
     tag "${sample}"
-    publishDir "${params.outdir}/gvcf"
 
     input:
     tuple(sample: String, bam: Path)
@@ -555,7 +551,6 @@ process GATK_VARIANT_RECALIBRATOR {
     """ touch ${dbname}.recal.vcf  ${dbname}.all.tranches """
 }
 process GATK_APPLY_VQSR {
-    // publishDir "${params.outdir}/vqsrfilt"
     tag "${dbname}"
 
     input:

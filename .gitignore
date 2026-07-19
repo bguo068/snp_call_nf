@@ -11,3 +11,4 @@ ena_data/*
 /ref/jacob2014_chip_sites.vcf.idx
 /tmp/*
 /test/*
+trace*

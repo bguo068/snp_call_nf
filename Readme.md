@@ -243,6 +243,7 @@ Use these to stop the pipeline at a specific stage:
 | `results/recal_bam_coverage/`      | Read coverage from analysis-ready BAMs                    |
 | `results/recal_bam_flagstat/`      | Flagstat from analysis-ready BAMs                         |
 | `results/gvcf/`                    | Per-sample GVCF files                                     |
+| `results/jointcall_vcf/`           | Raw joint-called VCF files                                |
 | `results/hardfilt_vcf/`            | Joint-called VCF with hard-filter annotations             |
 | `results/vqsrfilt_vcf/`            | Joint-called VCF with VQSR annotations (only when `--vqsr true` is used) |
 

@@ -753,6 +753,8 @@ workflow {
     // Genotype gvcf genomics db
     out_GATK_GENOTYPE_GVCFS = GATK_GENOTYPE_GVCFS(out_GATK_GENOMICS_DB_IMPORT, paths.parasite.fasta)
 
+    rp_jointcall_vcf = out_GATK_GENOTYPE_GVCFS
+
     // Select SNP only
     out_GATK_SELECT_VARIANTS = GATK_SELECT_VARIANTS(out_GATK_GENOTYPE_GVCFS, paths.parasite.fasta)
 
@@ -796,6 +798,7 @@ workflow {
     rp_recal_bam_coverage = rp_recal_bam_coverage
     rp_recal_bam_flagstat = rp_recal_bam_flagstat
     rp_gvcf               = rp_gvcf
+    rp_jointcall_vcf      = rp_jointcall_vcf
     rp_hardfilt_vcf       = rp_hardfilt_vcf
     rp_vqsrfilt_vcf       = rp_vqsrfilt_vcf
 }
@@ -841,6 +844,12 @@ output {
         path { sample, vcf, idx ->
             vcf >> "gvcf/${sample}.g.vcf"
             idx >> "gvcf/${sample}.g.vcf.idx"
+        }
+    }
+    rp_jointcall_vcf {
+        path { dbname, vcf, idx ->
+            vcf >> "jointcall_vcf/${dbname}.jointcall.vcf"
+            idx >> "jointcall_vcf/${dbname}.jointcall.vcf.idx"
         }
     }
     rp_hardfilt_vcf {

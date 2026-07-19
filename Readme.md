@@ -51,6 +51,8 @@ conda env create -f env/nf.yaml
 conda env create -f env/snp_call_nf.yaml
 ```
 
+NOTE: if apptainer is prefered over conda, see `env/README.md` for instructions.
+
 # How to run the pipeline?
 
 1. Link the reference files (internal users) or prepare them by yourself

@@ -87,6 +87,7 @@ cd ..
 2. Run the pipeline
    - Test it on HPC (local): `conda activate nf; nextflow main.nf`
      - This will use a tiny **test dataset** from `test_data` folder
+     - `vqsr` can also be tested: `nextflow main.nf  --vqsr true -profile standard,test`
      - To test on a larger **test data**, please run `cd ena_data;
 ena_data/download_ena_data.sh` (it may take hours to download all the
        real data from ENA). Once downloaded, change directory to project folder

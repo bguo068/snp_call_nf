@@ -236,17 +236,19 @@ Use these to stop the pipeline at a specific stage:
 
 | Path                              | Description                                              |
 |-----------------------------------|----------------------------------------------------------|
-| `result/readlen_raw/`             | Raw read lengths per sample/run                           |
-| `result/flagstat_raw/`            | Flagstat for host-genome alignments                       |
-| `result/flagstat_parasite/`       | Flagstat for parasite-genome alignments                   |
-| `result/recalibrated/`            | Analysis-ready BAM files (post host-removal & recalibration) |
-| `result/recal_bam_coverage/`      | Read coverage from analysis-ready BAMs                    |
-| `result/recal_bam_flagstat/`      | Flagstat from analysis-ready BAMs                         |
-| `result/gvcf/`                    | Per-sample GVCF files                                     |
-| `result/hardfilt_vcf/`            | Joint-called VCF with hard-filter annotations             |
-| `result/vqsrfilt_vcf/`            | Joint-called VCF with VQSR annotations (only when `--vqsr true` is used) |
+| `results/readlen_raw/`             | Raw read lengths per sample/run                           |
+| `results/flagstat_raw/`            | Flagstat for host-genome alignments                       |
+| `results/flagstat_parasite/`       | Flagstat for parasite-genome alignments                   |
+| `results/recalibrated/`            | Analysis-ready BAM files (post host-removal & recalibration) |
+| `results/recal_bam_coverage/`      | Read coverage from analysis-ready BAMs                    |
+| `results/recal_bam_flagstat/`      | Flagstat from analysis-ready BAMs                         |
+| `results/gvcf/`                    | Per-sample GVCF files                                     |
+| `results/hardfilt_vcf/`            | Joint-called VCF with hard-filter annotations             |
+| `results/vqsrfilt_vcf/`            | Joint-called VCF with VQSR annotations (only when `--vqsr true` is used) |
 
-You can use either `result/hardfilt_vcf/` or `result/vqsrfilt_vcf/` as your final filter annotated call set.
+You can use either `results/hardfilt_vcf/` or `results/vqsrfilt_vcf/` as your final filter annotated call set.
+
+Note: you can use nextflow option `-output-dir [res_alt]` to change the results folder to a different one
 
 ---
 

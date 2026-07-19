@@ -89,9 +89,13 @@ IMAGE_NAME=my_registry/snp_call_nf IMAGE_TAG=v1.0 ./env/build.sh docker
 
 ## Option 3 — Apptainer (SIF)
 
+NOTE: If you are a IGS server, you can skip the following and use a copy of the SIF image located at
+
+`/local/projects-t3/CVD/public_data/snp_call_nf_RESOURCES/snp_call_nf.sif`
+
 ### Prerequisites
 
-- Apptainer 1.1+
+- Apptainer >=1.3.6
 - An existing Docker image (`snp_call_nf:latest` — see Option 2)
 
 ### Build

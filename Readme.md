@@ -271,15 +271,15 @@ flowchart TD
     A["📁 Raw FASTQ"] --> B{"Host read<br/>removal method"}
 
     subgraph host_rm["2-step host reads removal"]
-        C["🗄️ BOWTIE2_ALIGN_TO_HOST<br/>Align reads to host genome"]
+        C["🗄️ BOWTIE2_ALIGN_TO_HOST<br/>Align reads to host genome<br/><br/>📤 flagstat_raw/<br/>📤  readlen_raw/"]
         D["️️🗄️ SAMTOOLS_VIEW_RM_HOST_READS<br/>Remove host-mapping reads"]
-        E["🗄️ SAMTOOLS_FASTQ<br/>Convert unmapped reads <br/> to FASTQ"]
+        E["🗄️ SAMTOOLS_FASTQ<br/>Convert unmapped reads <br/> to FASTQ<br/><br/>📤 parasite_reads/"]
         C --> D --> E
     end
 
     subgraph concat_path["concat_genome path"]
-        F["🗄️ BOWTIE2_ALIGN_TO_CONCAT_GENOME<br/>Align to human+parasite genome"]
-        G["🗄️ SAMTOOLS_FASTQ<br/>Convert parasite reads <br/> to FASTQ"]
+        F["🗄️ BOWTIE2_ALIGN_TO_CONCAT_GENOME<br/>Align to human+parasite genome<br/><br/>📤 flagstat_raw/<br/>📤  readlen_raw/"]
+        G["🗄️ SAMTOOLS_FASTQ<br/>Convert parasite reads <br/> to FASTQ<br/><br/>📤 parasite_reads/"]
         F --> G
     end
 
@@ -289,26 +289,26 @@ flowchart TD
     G --> H
 
     H -.->|parasite_reads_only| H1["🛑 Early stop:<br/>Save parasite FASTQs"]
-    H["🗄️ BOWTIE2_ALIGN_TO_PARASITE<br/>Align to parasite genome"] --> I["🗄️ PICARD_MERGE_SORT_BAMS<br/>Merge & sort runs per sample"]
+    H["🗄️ BOWTIE2_ALIGN_TO_PARASITE<br/>Align to parasite genome<br/><br/>📤 flagstat_parasite/"] --> I["🗄️ PICARD_MERGE_SORT_BAMS<br/>Merge & sort runs per sample"]
     I --> J["️🗄️ PICARD_MARK_DUPLICATES<br/>Mark duplicate reads"]
     J --> K["🗄️ GATK_BASE_RECALIBRATOR<br/>Recalibrate base qualities"]
-    K --> L["🗄️ GATK_APPLY_BQSR<br/>Apply recalibration"]
-    L -.->|coverage_only| L1["🛑 Early stop:<br/>Coverage & flagstat reports"]
-    L --> M["🗄️ GATK_HAPLOTYPE_CALLER<br/>Per-sample GVCF calling"]
+    K --> L["🗄️ GATK_APPLY_BQSR<br/>Apply recalibration<br/><br/>📤 recalibrated/"]
+    L -.->|coverage_only| L1["🛑 Early stop:<br/>Coverage & flagstat reports<br/><br/>📤 recal_bam_coverage/<br/>📤 recal_bam_flagstat/"]
+    L --> M["🗄️ GATK_HAPLOTYPE_CALLER<br/>Per-sample GVCF calling<br/><br/>📤 gvcf/"]
     M -.->|gvcf_only| M1["🛑 Early stop:<br/>Per-sample GVCFs"]
     M --> N["🗄️ GATK_GENOMICS_DB_IMPORT<br/>Import GVCFs to GenomicsDB"]
-    N --> O["🗄️ GATK_GENOTYPE_GVCFS<br/>Joint genotyping"]
+    N --> O["🗄️ GATK_GENOTYPE_GVCFS<br/>Joint genotyping<br/><br/>📤 jointcall_vcf/"]
     O --> P["🗄️ GATK_SELECT_VARIANTS<br/>Select SNPs only"]
 
     P --> Q{"Variant<br/>filtration"}
 
     subgraph hard_filt["--hard (default is on)"]
-        R["🗄️ GATK_VARIANT_FILTRATION<br/>Hard-filter variants"]
+        R["🗄️ GATK_VARIANT_FILTRATION<br/>Hard-filter variants<br/><br/>📤 hardfilt_vcf/"]
     end
 
     subgraph vqsr_filt["--vqsr (default is off)"]
         S["🗄️ GATK_VARIANT_RECALIBRATOR<br/>Build recalibration model"]
-        T["🗄️ GATK_APPLY_VQSR<br/>Apply VQSR filter"]
+        T["🗄️ GATK_APPLY_VQSR<br/>Apply VQSR filter<br/><br/>📤 vqsrfilt_vcf/"]
         S --> T
     end
 

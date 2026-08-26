@@ -673,7 +673,7 @@ workflow {
     }
 
     /// for report
-    rp_parasite_reads = ch_parasite_reads.flatMap { meta, fq_lst -> fq_lst.withIndex().collect { fq, idx -> tuple(meta, idx + 1, fq) } }
+    rp_parasite_reads = out_SAMTOOLS_FASTQ.flatMap { meta, fq_lst -> fq_lst.withIndex().collect { fq, idx -> tuple(meta, idx + 1, fq) } }
 
     // Align to parasite genome
     out_BOWTIE2_ALIGN_TO_PARASITE = BOWTIE2_ALIGN_TO_PARASITE(ch_parasite_reads, paths.parasite.fasta_prefix)

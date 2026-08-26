@@ -735,58 +735,69 @@ workflow {
         out_GATK_HAPLOTYPE_CALLER = channel.empty()
     }
 
-    // Collect information to make gvcf_map file
-    gvcf_map_ch = out_GATK_HAPLOTYPE_CALLER
-        .map { sample, gvcf, _idx -> "${sample}\t${gvcf}" }
-        .collect()
-        .map { lines ->
-            def out_file = file("gvcf_map.txt")
-            out_file.text = lines.toSorted().join("\n") + "\n"
-            return out_file
+    // Whether any joint calling should happen at all. Each of these flags is
+    // documented as stopping the pipeline at an earlier stage; without this
+    // guard the steps below still run, because interval_ch is built from
+    // config and gvcf_map_ch emits even when no gVCFs were produced.
+    def do_joint_call = !params.parasite_reads_only && !params.coverage_only && !params.gvcf_only
+
+    def rp_jointcall_vcf: Channel<Tuple<String, Path, Path>> = channel.empty()
+    def rp_hardfilt_vcf: Channel<Tuple<String, Path, Path>> = channel.empty()
+    def rp_vqsrfilt_vcf: Channel<Tuple<String, Path>> = channel.empty()
+
+    if (do_joint_call) {
+
+        // Collect information to make gvcf_map file
+        gvcf_map_ch = out_GATK_HAPLOTYPE_CALLER
+            .map { sample, gvcf, _idx -> "${sample}\t${gvcf}" }
+            .collect()
+            .map { lines ->
+                def out_file = file("gvcf_map.txt")
+                out_file.text = lines.toSorted().join("\n") + "\n"
+                return out_file
+            }
+
+        // Import gvcf files to genomicsdb
+        def interval_ch: Channel<String>
+        interval_ch = channel.fromList(params.genome_intervals[params.split])
+        out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch)
+
+        // Genotype gvcf genomics db
+        out_GATK_GENOTYPE_GVCFS = GATK_GENOTYPE_GVCFS(out_GATK_GENOMICS_DB_IMPORT, paths.parasite.fasta)
+
+        rp_jointcall_vcf = out_GATK_GENOTYPE_GVCFS
+
+        // Select SNP only
+        out_GATK_SELECT_VARIANTS = GATK_SELECT_VARIANTS(out_GATK_GENOTYPE_GVCFS, paths.parasite.fasta)
+
+        // Hard filtering and Keep 'PASS' variants
+        if (params.hard == true) {
+            out_GATK_VARIANT_FILTRATION = GATK_VARIANT_FILTRATION(out_GATK_SELECT_VARIANTS, paths.parasite.fasta)
+            rp_hardfilt_vcf = out_GATK_VARIANT_FILTRATION
         }
 
-    // Import gvcf files to genomicsdb
-    def interval_ch: Channel<String>
-    interval_ch = channel.fromList(params.genome_intervals[params.split])
-    out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch)
+        // VQSR variant filtering
+        if (params.vqsr) {
+            out_GATK_VARIANT_RECALIBRATOR = GATK_VARIANT_RECALIBRATOR(
+                out_GATK_SELECT_VARIANTS,
+                params.vqsr_resources,
+                params.vqsr_opts,
+                params.vqsr_mode,
+                paths.parasite.fasta,
+            )
+            out_GATK_APPLY_VQSR = GATK_APPLY_VQSR(
+                out_GATK_SELECT_VARIANTS.map { dbname, vcf, vcf_idx -> record(dbname: dbname, vcf: vcf, vcf_idx: vcf_idx) }.join(
+                    out_GATK_VARIANT_RECALIBRATOR.map { dbname, recal, tranches ->
+                        record(dbname: dbname, recal: recal, tranches: tranches)
+                    },
+                    by: "dbname"
+                ).map { rec -> tuple(rec.dbname, rec.vcf, rec.vcf_idx, rec.recal, rec.tranches) },
+                params.vqsr_mode,
+                paths.parasite.fasta,
+            )
 
-    // Genotype gvcf genomics db
-    out_GATK_GENOTYPE_GVCFS = GATK_GENOTYPE_GVCFS(out_GATK_GENOMICS_DB_IMPORT, paths.parasite.fasta)
-
-    rp_jointcall_vcf = out_GATK_GENOTYPE_GVCFS
-
-    // Select SNP only
-    out_GATK_SELECT_VARIANTS = GATK_SELECT_VARIANTS(out_GATK_GENOTYPE_GVCFS, paths.parasite.fasta)
-
-    // Hard filtering and Keep 'PASS' variants
-    def rp_hardfilt_vcf: Channel<Tuple<String, Path, Path>> = channel.fromList([])
-    if (params.hard == true) {
-        out_GATK_VARIANT_FILTRATION = GATK_VARIANT_FILTRATION(out_GATK_SELECT_VARIANTS, paths.parasite.fasta)
-        rp_hardfilt_vcf = out_GATK_VARIANT_FILTRATION
-    }
-
-    // VQSR variant filtering
-    def rp_vqsrfilt_vcf: Channel<Tuple<String, Path>> = channel.empty()
-    if (params.vqsr) {
-        out_GATK_VARIANT_RECALIBRATOR = GATK_VARIANT_RECALIBRATOR(
-            out_GATK_SELECT_VARIANTS,
-            params.vqsr_resources,
-            params.vqsr_opts,
-            params.vqsr_mode,
-            paths.parasite.fasta,
-        )
-        out_GATK_APPLY_VQSR = GATK_APPLY_VQSR(
-            out_GATK_SELECT_VARIANTS.map { dbname, vcf, vcf_idx -> record(dbname: dbname, vcf: vcf, vcf_idx: vcf_idx) }.join(
-                out_GATK_VARIANT_RECALIBRATOR.map { dbname, recal, tranches ->
-                    record(dbname: dbname, recal: recal, tranches: tranches)
-                },
-                by: "dbname"
-            ).map { rec -> tuple(rec.dbname, rec.vcf, rec.vcf_idx, rec.recal, rec.tranches) },
-            params.vqsr_mode,
-            paths.parasite.fasta,
-        )
-
-        rp_vqsrfilt_vcf = out_GATK_APPLY_VQSR
+            rp_vqsrfilt_vcf = out_GATK_APPLY_VQSR
+        }
     }
 
     publish:

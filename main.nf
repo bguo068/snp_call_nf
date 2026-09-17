@@ -621,7 +621,7 @@ workflow {
     if (params.use_concat_genome) {
         // Prepare input chanel
         // csv contains sample, host_id, run, mate_id, fq_path
-        input_ch = ch_read_pairs.map { sample, host_id, run, fq ->
+        input_concat_ch = ch_read_pairs.map { sample, host_id, run, fq ->
             def meta = record(
                 Sample: sample,
                 Run: run,
@@ -632,7 +632,7 @@ workflow {
             def fq_paths = fq.collect { it -> file(it) }
             return tuple(meta, fq_paths)
         }
-        out_BOWTIE2_ALIGN_TO_CONCAT_GENOME = BOWTIE2_ALIGN_TO_CONCAT_GENOME(input_ch)
+        out_BOWTIE2_ALIGN_TO_CONCAT_GENOME = BOWTIE2_ALIGN_TO_CONCAT_GENOME(input_concat_ch)
         out_SAMTOOLS_FASTQ = SAMTOOLS_FASTQ(
             out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> tuple(rec.meta, rec.parasite_bam) }
         )

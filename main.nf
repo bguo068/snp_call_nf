@@ -404,8 +404,7 @@ process GATK_GENOMICS_DB_IMPORT {
     tag "${interval}"
 
     input:
-    interval: String
-    gvcf_map: Path
+    tuple(interval: String, gvcf_map: Path)
 
     output:
     dbdir = file("*", type: 'dir', maxDepth: 1)
@@ -754,7 +753,7 @@ workflow {
     // Import gvcf files to genomicsdb
     def interval_ch: Channel<String>
     interval_ch = channel.fromList(params.genome_intervals[params.split])
-    out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch)
+    out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch.combine(gvcf_map_ch))
 
     // Genotype gvcf genomics db
     out_GATK_GENOTYPE_GVCFS = GATK_GENOTYPE_GVCFS(out_GATK_GENOMICS_DB_IMPORT, paths.parasite.fasta)

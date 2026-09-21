@@ -671,7 +671,6 @@ workflow {
     if (params.parasite_reads_only) {
         ch_parasite_reads = channel.empty()
     }
-    ch_parasite_reads.view()
     /// for report
     rp_parasite_reads = out_SAMTOOLS_FASTQ.flatMap { meta, fq_lst -> fq_lst.withIndex().collect { fq, idx -> tuple(meta, idx + 1, fq) } }
 
@@ -749,6 +748,7 @@ workflow {
                 []
             }
         }
+        .first()
 
 
     // Import gvcf files to genomicsdb

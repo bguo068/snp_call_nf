@@ -33,7 +33,11 @@ class URLS:
     pf_crosses_v1: ClassVar = {
         "server": "ngs.sanger.ac.uk",
         "remotedir": "/production/malaria/pf-crosses/1.0/",
-        "vcf_files": ["3d7_hb3.gatk.final.vcf.gz", "7g8_gb4.gatk.final.vcf.gz", "hb3_dd2.gatk.final.vcf.gz"],
+        "vcf_files": [
+            "3d7_hb3.gatk.final.vcf.gz",
+            "7g8_gb4.gatk.final.vcf.gz",
+            "hb3_dd2.gatk.final.vcf.gz",
+        ],
         "orig_files": [
             "pf_crosses_v1/3d7_hb3.gatk.final.vcf.gz",
             "pf_crosses_v1/7g8_gb4.gatk.final.vcf.gz",
@@ -50,7 +54,7 @@ class URLS:
 
 def download_genome_fasta_files():
     for genome in URLS.genomes:
-        prefix = genome['prefix']
+        prefix = genome["prefix"]
         if "concat" in prefix:
             continue
         # local file
@@ -78,7 +82,9 @@ def download_genome_fasta_files():
 
         if local_fn.endswith(".gz"):
             res = run(
-                f"""gzip -dc {local_fn} > {target_fn}; rm {local_fn}""", shell=True, check=False
+                f"""gzip -dc {local_fn} > {target_fn}; rm {local_fn}""",
+                shell=True,
+                check=False,
             )
             assert res.returncode == 0
 
@@ -179,8 +185,7 @@ def known_variants_from_pf_crosses_v1():
             shell=True,
             capture_output=True,
             text=True,
-            check=True
-
+            check=True,
         )
 
     # merge vcfs and generate .idx file
@@ -203,7 +208,75 @@ def known_variants_from_pf_crosses_v1():
         sys.exit(-1)
 
 
+def check_if_all_files_exist_already():
+    files = """
+    PlasmoDB-44_Pfalciparum3D7_Genome.1.bt2
+    PlasmoDB-44_Pfalciparum3D7_Genome.2.bt2
+    PlasmoDB-44_Pfalciparum3D7_Genome.3.bt2
+    PlasmoDB-44_Pfalciparum3D7_Genome.4.bt2
+    PlasmoDB-44_Pfalciparum3D7_Genome.dict
+    PlasmoDB-44_Pfalciparum3D7_Genome.fasta
+    PlasmoDB-44_Pfalciparum3D7_Genome.fasta.fai
+    PlasmoDB-44_Pfalciparum3D7_Genome.rev.1.bt2
+    PlasmoDB-44_Pfalciparum3D7_Genome.rev.2.bt2
+    concat/hg38_pf3d7v44.1.bt2
+    concat/hg38_pf3d7v44.2.bt2
+    concat/hg38_pf3d7v44.3.bt2
+    concat/hg38_pf3d7v44.4.bt2
+    concat/hg38_pf3d7v44.dict
+    concat/hg38_pf3d7v44.fasta
+    concat/hg38_pf3d7v44.fasta.fai
+    concat/hg38_pf3d7v44.rev.1.bt2
+    concat/hg38_pf3d7v44.rev.2.bt2
+    host/hg38.1.bt2
+    host/hg38.2.bt2
+    host/hg38.3.bt2
+    host/hg38.4.bt2
+    host/hg38.dict
+    host/hg38.fasta
+    host/hg38.fasta.fai
+    host/hg38.rev.1.bt2
+    host/hg38.rev.2.bt2
+    jacob2014_chip_sites.vcf
+    jacob2014_chip_sites.vcf.idx
+    pf_crosses_v1/3d7_hb3.gatk.final.vcf.gz
+    pf_crosses_v1/3d7_hb3.gatk.final.vcf.gz.tbi
+    pf_crosses_v1/7g8_gb4.gatk.final.vcf.gz
+    pf_crosses_v1/7g8_gb4.gatk.final.vcf.gz.tbi
+    pf_crosses_v1/hb3_dd2.gatk.final.vcf.gz
+    pf_crosses_v1/hb3_dd2.gatk.final.vcf.gz.tbi
+    pf_crosses_v1/known_variants.vcf
+    pf_crosses_v1/known_variants.vcf.idx
+    pf_crosses_v1/pass_3d7_hb3.gatk.final.vcf.gz
+    pf_crosses_v1/pass_3d7_hb3.gatk.final.vcf.gz.csi
+    pf_crosses_v1/pass_3d7_hb3.gatk.final.vcf.gz.tbi
+    pf_crosses_v1/pass_7g8_gb4.gatk.final.vcf.gz
+    pf_crosses_v1/pass_7g8_gb4.gatk.final.vcf.gz.csi
+    pf_crosses_v1/pass_7g8_gb4.gatk.final.vcf.gz.tbi
+    pf_crosses_v1/pass_hb3_dd2.gatk.final.vcf.gz
+    pf_crosses_v1/pass_hb3_dd2.gatk.final.vcf.gz.csi
+    pf_crosses_v1/pass_hb3_dd2.gatk.final.vcf.gz.tbi
+    pf_crosses_v1/tmp/pass_3d7_hb3.gatk.final.vcf.gz
+    pf_crosses_v1/tmp/pass_3d7_hb3.gatk.final.vcf.gz.csi
+    pf_crosses_v1/tmp/pass_3d7_hb3.gatk.final.vcf.gz.tbi
+    pf_crosses_v1/tmp/pass_7g8_gb4.gatk.final.vcf.gz
+    pf_crosses_v1/tmp/pass_7g8_gb4.gatk.final.vcf.gz.csi
+    pf_crosses_v1/tmp/pass_7g8_gb4.gatk.final.vcf.gz.tbi
+    pf_crosses_v1/tmp/pass_hb3_dd2.gatk.final.vcf.gz
+    pf_crosses_v1/tmp/pass_hb3_dd2.gatk.final.vcf.gz.csi
+    pf_crosses_v1/tmp/pass_hb3_dd2.gatk.final.vcf.gz.tbi
+    """
+    for p in files.strip().split():
+        if not Path(p).exists():
+            return False
+    return True
+
+
 if __name__ == "__main__":
+    if check_if_all_files_exist_already():
+        print("all ref files already exist. exit with 0")
+        sys.exit(0)
+
     print("downloading fasta files")
     download_genome_fasta_files()
     print("Done obtaining fasta files")

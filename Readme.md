@@ -111,9 +111,7 @@ pixi run nextflow main.nf -profile pixi,standard --fq_map ena_data/ena_fastq_map
 
 ### 1. Prepare reference files
 ```sh
-cd ref
-pixi run python3 prep_ref_files.py
-cd ..
+pixi run prep-ref
 ```
 
 ### 2. Prepare your sample sheet

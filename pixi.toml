@@ -6,6 +6,21 @@ platforms = ["osx-arm64", "linux-64", "linux-aarch64", "osx-64"]
 version = "0.2.0"
 
 [tasks]
+prep-ref = "cd ref && python prep_ref_files.py"
+
+test-stub-default = "nextflow run main.nf -stub"
+test-stub-partial-parasite-reads-only = "nextflow run main.nf -stub --parasite_reads_only"
+test-stub-partial-coverage-only = "nextflow run main.nf -stub --coverage_only"
+test-stub-partial-gvcf-only = "nextflow run main.nf -stub --gvcf_only"
+
+test-default = "nextflow main.nf -profile pixi,standard"
+test-split = "nextflow main.nf -profile pixi,standard --split intervals"
+test-vqsr = "nextflow main.nf --vqsr true -profile pixi,standard,test"
+
+# --------------------------------------------------------------------------------------
+test-stub = { depends-on = ["test-stub-default", "test-stub-partial-parasite-reads-only", "test-stub-partial-coverage-only", "test-stub-partial-gvcf-only"  ] }
+test = {depends-on = ["prep-ref", "test-default", "test-default", "test-default"]}
+test-hpc-slurm = "pixi run nextflow main.nf -profile pixi,slurm"
 
 [dependencies]
 nextflow = "26.4.6.*"

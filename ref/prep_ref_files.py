@@ -1,14 +1,18 @@
-import requests
+#! /usr/bin/env python
 import ftplib
+import sys
 from pathlib import Path
 from subprocess import run
+from typing import ClassVar
+
+import requests
 
 
 class URLS:
     host_idx = 0
     pf_idx = 1
     concat_idx = 2
-    genomes = [
+    genomes: ClassVar = [
         {
             "prefix": "host/hg38",
             "url": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz",
@@ -17,7 +21,7 @@ class URLS:
         },
         {
             "prefix": "PlasmoDB-44_Pfalciparum3D7_Genome",
-            "url": "https://plasmodb.org/common/downloads/release-44/Pfalciparum3D7/fasta/data/PlasmoDB-44_Pfalciparum3D7_Genome.fasta",
+            "url": "https://github.com/bguo068/snpeff_annot/releases/download/v26.09.14-alpha/PlasmoDB-44_Pfalciparum3D7.tgz",
             "local_fn": "PlasmoDB-44_Pfalciparum3D7_Genome.fasta",
             "fasta_fn": "PlasmoDB-44_Pfalciparum3D7_Genome.fasta",
         },
@@ -26,10 +30,10 @@ class URLS:
             "fasta_fn": "concat/hg38_pf3d7v44.fasta",
         },
     ]
-    pf_crosses_v1 = {
+    pf_crosses_v1: ClassVar = {
         "server": "ngs.sanger.ac.uk",
         "remotedir": "/production/malaria/pf-crosses/1.0/",
-        "vcf_files": "3d7_hb3.gatk.final.vcf.gz 7g8_gb4.gatk.final.vcf.gz hb3_dd2.gatk.final.vcf.gz".split(),
+        "vcf_files": ["3d7_hb3.gatk.final.vcf.gz", "7g8_gb4.gatk.final.vcf.gz", "hb3_dd2.gatk.final.vcf.gz"],
         "orig_files": [
             "pf_crosses_v1/3d7_hb3.gatk.final.vcf.gz",
             "pf_crosses_v1/7g8_gb4.gatk.final.vcf.gz",
@@ -60,15 +64,21 @@ def download_genome_fasta_files():
         if Path(target_fn).exists():
             continue
 
+        if "https://github.com/bguo068/snpeff_annot/releases" in url:
+            cmd = f"""
+              wget -qO- --max-redirect=20 {url}  | tar -xzf - {target_fn}
+            """
+            run(cmd, shell=True, check=True)
+            continue
+
         with requests.get(url, allow_redirects=True, stream=True) as response:
             response.raise_for_status()
             with open(local_fn, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                f.writelines(response.iter_content(chunk_size=8192))
 
         if local_fn.endswith(".gz"):
             res = run(
-                f"""gzip -dc {local_fn} > {target_fn}; rm {local_fn}""", shell=True
+                f"""gzip -dc {local_fn} > {target_fn}; rm {local_fn}""", shell=True, check=False
             )
             assert res.returncode == 0
 
@@ -80,11 +90,11 @@ def concat_pf_human_genomes():
     if Path(concat_g).exists():
         return
     Path(concat_g).parent.mkdir(parents=True, exist_ok=True)
-    cmd = f"cat {host_g} {pf_g} | gzip > {concat_g}"
-    res = run(cmd, shell=True, capture_output=True)
+    cmd = f"cat {host_g} {pf_g} > {concat_g}"
+    res = run(cmd, shell=True, capture_output=True, check=False)
     if res.returncode != 0:
         print(res.stderr)
-        exit(-1)
+        sys.exit(-1)
 
 
 def index_fasta_files():
@@ -96,28 +106,28 @@ def index_fasta_files():
             print(Path(fa_prefix + ".1.bt2"))
             cmd = f"bowtie2-build --threads 20 {fa_prefix}.fasta {fa_prefix}"
             print(f"\t building bt2 indices for {fa_fn}")
-            res = run(cmd, shell=True, capture_output=True)
+            res = run(cmd, shell=True, capture_output=True, check=False)
             if res.returncode != 0:
                 print(res.stderr)
-                exit(-1)
+                sys.exit(-1)
         # fai index
         if not Path(fa_prefix + ".fasta.fai").exists():
             cmd = f"samtools faidx {fa_prefix}.fasta"
             print(f"\t building fai index for {fa_fn}")
-            res = run(cmd, shell=True, capture_output=True)
+            res = run(cmd, shell=True, capture_output=True, check=False)
             if res.returncode != 0:
                 print(res.stderr)
-                exit(-1)
+                sys.exit(-1)
         # dict index
         if not Path(fa_prefix + ".dict").exists():
             cmd = f"""
             gatk --java-options "-Xmx10G" CreateSequenceDictionary -R {fa_prefix}.fasta -O {fa_prefix}.dict
             """
             print(f"\t building dict index for {fa_fn}")
-            res = run(cmd, shell=True, capture_output=True)
+            res = run(cmd, shell=True, capture_output=True, check=True)
             if res.returncode != 0:
                 print(res.stderr)
-                exit(-1)
+                sys.exit(-1)
 
 
 def download_pf_crosses_v1_vcfs():
@@ -128,9 +138,9 @@ def download_pf_crosses_v1_vcfs():
         Path(fn).parent.mkdir(parents=True, exist_ok=True)
 
     # DOWNLOAD VCF from pfcrosses1.0
-    ftp_server = ftplib.FTP(URLS.pf_crosses_v1["server"])
+    ftp_server = ftplib.FTP(URLS.pf_crosses_v1["server"])  # ty: ignore[invalid-argument-type]
     ftp_server.login()
-    ftp_server.cwd(URLS.pf_crosses_v1["remotedir"])
+    ftp_server.cwd(URLS.pf_crosses_v1["remotedir"])  # ty: ignore[invalid-argument-type]
     for remote_filename, local_filename in zip(remote_filename_lst, local_filename_lst):
         if not Path(local_filename).exists():
             with open(local_filename, "wb") as file:
@@ -143,14 +153,14 @@ def download_pf_crosses_v1_vcfs():
         idx_fn = local_fn + ".tbi"
         if not Path(idx_fn).exists():
             cmd = f"gatk IndexFeatureFile -I {local_fn}"
-            res = run(cmd, shell=True, capture_output=True, text=True)
+            res = run(cmd, shell=True, capture_output=True, text=True, check=False)
             if (
                 res.returncode != 0
                 or "error" in res.stderr.lower()
                 or "error" in res.stdout.lower()
             ):
                 print(res.stderr)
-                exit(-1)
+                sys.exit(-1)
 
 
 def known_variants_from_pf_crosses_v1():
@@ -160,7 +170,7 @@ def known_variants_from_pf_crosses_v1():
     # keep pass only
     for origf, passf in zip(local_filename_lst, filt_filename_lst):
         print("filter " + origf)
-        res = run(
+        _res = run(
             f"""
             bcftools view -f PASS {origf} -Oz -o {passf}
             bcftools index {passf}
@@ -168,8 +178,9 @@ def known_variants_from_pf_crosses_v1():
             shell=True,
             capture_output=True,
             text=True,
+            check=True
+
         )
-        assert res.returncode == 0
 
     # merge vcfs and generate .idx file
     print("merge filtered vcfs and generate.idx file")
@@ -181,14 +192,14 @@ def known_variants_from_pf_crosses_v1():
         gatk IndexFeatureFile -I {known_variants_vcf}
         """,
     )
-    res = run(cmd, shell=True, capture_output=True, text=True)
+    res = run(cmd, shell=True, capture_output=True, text=True, check=True)
     if (
         res.returncode != 0
         or "error" in res.stderr.lower()
         or "error" in res.stdout.lower()
     ):
         print(res.stderr)
-        exit(-1)
+        sys.exit(-1)
 
 
 if __name__ == "__main__":

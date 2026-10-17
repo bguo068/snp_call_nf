@@ -38,7 +38,7 @@ process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
     tuple(meta: SampleMeta, fastq: List<Path>)
 
     output:
-    rec = record(
+    record(
         meta: meta,
         concat_bam: file("*to_concat.bam"),
         parasite_bam: file("*to_parasite.bam"),
@@ -131,7 +131,7 @@ process SAMTOOLS_VIEW_RM_HOST_READS {
     tuple(meta: SampleMeta, bam: Path)
 
     output:
-    bam = tuple(meta, file("*.bam"))
+    tuple(meta, file("*.bam"))
 
     script:
     def flag = meta.is_paired ? "-f 12 -F 256" : "-f 4"
@@ -151,7 +151,7 @@ process SAMTOOLS_FASTQ {
     tuple(meta: SampleMeta, bam: Path)
 
     output:
-    fq = tuple(meta, files("*.fastq.gz").toSorted())
+    tuple(meta, files("*.fastq.gz").toSorted())
 
     script:
     if (meta.is_paired) {
@@ -242,7 +242,7 @@ process PICARD_MARK_DUPLICATES {
     tuple(sample: String, bam: Path)
 
     output:
-    bam = tuple(sample, file("*dedup.bam"))
+    tuple(sample, file("*dedup.bam"))
 
     script:
     def opts = "--USE_JDK_DEFLATER true --USE_JDK_INFLATER true"
@@ -266,7 +266,7 @@ process GATK_BASE_RECALIBRATOR {
     known_sites: List<String>
 
     output:
-    bam_rectbl = tuple(sample, file(bam.name), file("recal_data.table"))
+    tuple(sample, file(bam.name), file("recal_data.table"))
 
     script:
     def known_sites_str = known_sites.join(" --known-sites ")
@@ -288,7 +288,7 @@ process GATK_APPLY_BQSR {
     ref: String
 
     output:
-    bam = tuple(sample, file("*recalibrated.bam"))
+    tuple(sample, file("*recalibrated.bam"))
 
     script:
     """
@@ -389,7 +389,7 @@ process GATK_HAPLOTYPE_CALLER {
     ref: String
 
     output:
-    gvcf = tuple(sample, file("*.g.vcf"), file("*.g.vcf.idx"))
+    tuple(sample, file("*.g.vcf"), file("*.g.vcf.idx"))
 
     script:
     """
@@ -406,11 +406,10 @@ process GATK_GENOMICS_DB_IMPORT {
     tag "${interval}"
 
     input:
-    interval: String
-    gvcf_map: Path
+    tuple(interval: String, gvcf_map: Path)
 
     output:
-    dbdir = file("*", type: 'dir', maxDepth: 1)
+    file("*", type: 'dir', maxDepth: 1)
 
     script:
     def dbname = interval.replaceAll(":", "~")
@@ -438,7 +437,7 @@ process GATK_GENOTYPE_GVCFS {
     ref: String
 
     output:
-    db_vcf = tuple(env('DBNAME'), file("*.vcf"), file("*.idx"))
+    tuple(env('DBNAME'), file("*.vcf"), file("*.idx"))
 
     script:
     def dbname = db.getName()
@@ -465,7 +464,7 @@ process GATK_SELECT_VARIANTS {
     ref: String
 
     output:
-    db_vcf = tuple(dbname, file("*.snp.vcf"), file("*.snp.vcf.idx"))
+    tuple(dbname, file("*.snp.vcf"), file("*.snp.vcf.idx"))
 
     script:
     """
@@ -538,7 +537,7 @@ process GATK_VARIANT_RECALIBRATOR {
     ref: String
 
     output:
-    recalvcf = tuple(dbname, file("*.recal.vcf"), file("*.tranches"))
+    tuple(dbname, file("*.recal.vcf"), file("*.tranches"))
 
     script:
     def resources_str = get_vqsr_resources(resources)
@@ -624,7 +623,7 @@ workflow {
     if (params.use_concat_genome) {
         // Prepare input chanel
         // csv contains sample, host_id, run, mate_id, fq_path
-        input_ch = ch_read_pairs.map { sample, host_id, run, fq ->
+        input_concat_ch = ch_read_pairs.map { sample, host_id, run, fq ->
             def meta = record(
                 Sample: sample,
                 Run: run,
@@ -635,7 +634,7 @@ workflow {
             def fq_paths = fq.collect { it -> file(it) }
             return tuple(meta, fq_paths)
         }
-        out_BOWTIE2_ALIGN_TO_CONCAT_GENOME = BOWTIE2_ALIGN_TO_CONCAT_GENOME(input_ch)
+        out_BOWTIE2_ALIGN_TO_CONCAT_GENOME = BOWTIE2_ALIGN_TO_CONCAT_GENOME(input_concat_ch)
         out_SAMTOOLS_FASTQ = SAMTOOLS_FASTQ(
             out_BOWTIE2_ALIGN_TO_CONCAT_GENOME.map { rec -> tuple(rec.meta, rec.parasite_bam) }
         )
@@ -756,7 +755,7 @@ workflow {
     // Import gvcf files to genomicsdb
     def interval_ch: Channel<String>
     interval_ch = channel.fromList(params.genome_intervals[params.split])
-    out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch, gvcf_map_ch)
+    out_GATK_GENOMICS_DB_IMPORT = GATK_GENOMICS_DB_IMPORT(interval_ch.combine(gvcf_map_ch))
 
     // Genotype gvcf genomics db
     out_GATK_GENOTYPE_GVCFS = GATK_GENOTYPE_GVCFS(out_GATK_GENOMICS_DB_IMPORT, paths.parasite.fasta)

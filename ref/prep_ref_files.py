@@ -40,9 +40,9 @@ class URLS:
             "pf_crosses_v1/hb3_dd2.gatk.final.vcf.gz",
         ],
         "filt_files": [
-            "pf_crosses_v1/3d7_hb3.gatk.final.pass.vcf.gz",
-            "pf_crosses_v1/7g8_gb4.gatk.final.pass.vcf.gz",
-            "pf_crosses_v1/hb3_dd2.gatk.final.pass.vcf.gz",
+            "pf_crosses_v1/pass_3d7_hb3.gatk.final.vcf.gz",
+            "pf_crosses_v1/pass_7g8_gb4.gatk.final.vcf.gz",
+            "pf_crosses_v1/pass_hb3_dd2.gatk.final.vcf.gz",
         ],
         "known_variants_vcf": "pf_crosses_v1/known_variants.vcf",
     }
@@ -174,6 +174,7 @@ def known_variants_from_pf_crosses_v1():
             f"""
             bcftools view -f PASS {origf} -Oz -o {passf}
             bcftools index {passf}
+            tabix {passf}
             """,
             shell=True,
             capture_output=True,

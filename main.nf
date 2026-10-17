@@ -57,7 +57,7 @@ process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
     bowtie2 -x ${meta.Concat_ref_prefix}  ${reads} ${read_group} -p ${task.cpus}|\
         samtools view -q 0 -bS|\
         samtools sort --threads ${task.cpus} -o ${meta.Sample}~${meta.Run}~to_concat.bam -
-    
+
     # get read length
     set +o pipefail
     samtools view ${meta.Sample}~${meta.Run}~to_concat.bam|\
@@ -71,7 +71,7 @@ process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
 
     # subset to alignment to parasite chromosome
     samtools index ${meta.Sample}~${meta.Run}~to_concat.bam
-    samtools view -b ${meta.Sample}~${meta.Run}~to_concat.bam  \${parasite_chrnames}  -o ${meta.Sample}~${meta.Run}~to_parasite.bam  
+    samtools view -b ${meta.Sample}~${meta.Run}~to_concat.bam  \${parasite_chrnames}  -o ${meta.Sample}~${meta.Run}~to_parasite.bam
 
     # get flatstats
     samtools flagstat ${meta.Sample}~${meta.Run}~to_parasite.bam \
@@ -80,7 +80,9 @@ process BOWTIE2_ALIGN_TO_CONCAT_GENOME {
     """
 
     stub:
-    """ 
+    """
+    touch ${meta.Sample}~${meta.Run}~to_concat.bam
+    touch ${meta.Sample}~${meta.Run}~to_parasite.bam
     touch ${meta.Sample}~${meta.Run}~to_concat.bam{,.flagstat}
     touch ${meta.Sample}~${meta.Run}_read_length.txt
     """
@@ -116,7 +118,7 @@ process BOWTIE2_ALIGN_TO_HOST {
     """
 
     stub:
-    """ 
+    """
     touch ${meta.Sample}~${meta.Run}~to_host.bam{,.flagstat}
     touch ${meta.Sample}~${meta.Run}_read_length.txt
     """
@@ -155,13 +157,13 @@ process SAMTOOLS_FASTQ {
     if (meta.is_paired) {
         """
     samtools fastq -@ ${task.cpus} ${bam} \
-        -1 f1.fastq.gz -2 f2.fastq.gz -0 /dev/null -s /dev/null -n	
+        -1 f1.fastq.gz -2 f2.fastq.gz -0 /dev/null -s /dev/null -n
     """
     }
     else {
         """
     samtools fastq -@ ${task.cpus} ${bam} \
-        -o /dev/null -s /dev/null -0 f.fastq.gz -n  
+        -o /dev/null -s /dev/null -0 f.fastq.gz -n
     """
     }
 
@@ -271,7 +273,7 @@ process GATK_BASE_RECALIBRATOR {
     """
     gatk --java-options "-Djava.io.tmpdir=${params.gatk_tmpdir}  -Xmx${task.memory.toGiga()}G" \
         BaseRecalibrator -I ${bam} -O recal_data.table \
-	-R ${ref} --known-sites ${known_sites_str} 
+	-R ${ref} --known-sites ${known_sites_str}
     """
 
     stub:
@@ -355,8 +357,8 @@ process BEDTOOLS_GENOMECOV {
     """
 
     stub:
-    """ 
-    touch ${sample}_recalibrated.coverage.BedGraph.gz 
+    """
+    touch ${sample}_recalibrated.coverage.BedGraph.gz
     touch ${sample}_recalibrated.coverage.summary.txt
     """
 }
@@ -696,7 +698,7 @@ workflow {
 
     merge_input = out_BOWTIE2_ALIGN_TO_PARASITE.map { rec -> record(sample: rec.meta.Sample, bam: rec.bam) }.join(n_run, by: "sample").map { rec -> tuple(rec.sample, rec.num, rec.bam) }.groupBy()
 
-    // For each sample, merge and sort bam files of different runs 
+    // For each sample, merge and sort bam files of different runs
     out_PICARD_MERGE_SORT_BAMS = PICARD_MERGE_SORT_BAMS(merge_input)
 
     out_PICARD_MARK_DUPLICATES = PICARD_MARK_DUPLICATES(out_PICARD_MERGE_SORT_BAMS)
@@ -730,7 +732,7 @@ workflow {
 
 
     if (params.gvcf_only) {
-        // this will stop any steps after haplotype caller 
+        // this will stop any steps after haplotype caller
         out_GATK_HAPLOTYPE_CALLER = channel.empty()
     }
 

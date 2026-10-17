@@ -58,28 +58,13 @@ cd snp_call_nf
 
 ### Step 2: Install Conda (if needed)
 
-Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+Install [pixi](https://pixi.prefix.dev/latest/installation/).
 
-### Step 3: Create the Conda environments
+### Step 3: Create the environment
 
 ```sh
-# Install Nextflow environment
-conda env create -f env/nf.yaml
-
-# Install pipeline environment
-conda env create -f env/snp_call_nf.yaml
+pixi install --locked
 ```
-
-> **Note:** If you already have Nextflow installed, you can skip the `nf` environment and pin the version directly:
-> ```sh
-> nextflow self-update
-> export NXF_VER=26.04.6
-> nextflow main.nf [args]
-> ```
-
-> **Apptainer/Singularity users:** See [`env/README.md`](env/README.md) for container-based setup instructions.
-
----
 
 ## Quick Start: Test the Pipeline
 
@@ -88,29 +73,25 @@ A tiny test dataset is included in the `test_data/` folder. Use it to verify you
 ### Local / HPC (single node)
 
 ```sh
-conda activate nf
-nextflow main.nf
+pixi run nextflow main.nf -profile pixi,standard
 ```
 
 To test with VQSR enabled:
 
 ```sh
-conda activate nf
-nextflow main.nf --vqsr true -profile standard,test
+pixi run nextflow main.nf --vqsr true -profile pixi,standard,test
 ```
 
 ### SGE cluster
 
 ```sh
-conda activate nf
-nextflow main.nf -profile sge
+pixi run nextflow main.nf -profile pixi,sge
 ```
 
 ### Slurm cluster
 
 ```sh
-conda activate nf
-nextflow main.nf -profile slurm
+pixi run nextflow main.nf -profile pixi,slurm
 ```
 
 ### Larger test dataset (ENA downloads)
@@ -119,10 +100,9 @@ To test with real (but public) ENA data:
 
 ```sh
 cd ena_data
-bash download_ena_data.sh      # may take hours to download
+pixi run bash download_ena_data.sh      # may take hours to download
 cd ..
-conda activate nf
-nextflow main.nf --fq_map ena_data/ena_fastq_map.tsv
+pixi run nextflow main.nf -profile pixi,standard --fq_map ena_data/ena_fastq_map.tsv
 ```
 
 ---
@@ -130,22 +110,9 @@ nextflow main.nf --fq_map ena_data/ena_fastq_map.tsv
 ## Running on Your Own Data
 
 ### 1. Prepare reference files
-
-**Internal users (IGS / Rosalind):** Symlink existing reference files.
-
-| Server    | Command                                                                  |
-|-----------|--------------------------------------------------------------------------|
-| IGS       | `ln -s /local/projects-t3/toconnor_grp/bing.guo/ref/* ref/`             |
-| IGS (alt) | `ln -s /local/projects-t2/CVD/Takala-Harrison/Cambodia_Bing/ref/* ref/` |
-| Rosalind  | `ln -s /local/data/Malaria/Projects/Takala-Harrison/Cambodia_Bing/ref/* ref/` |
-
-**External users:** Generate reference files from scratch.
-
 ```sh
 cd ref
-conda activate snp_call_nf
-python3 prep_ref_files.py
-conda deactivate
+pixi run python3 prep_ref_files.py
 cd ..
 ```
 
@@ -166,11 +133,10 @@ The file is **tab-delimited** with five columns:
 ### 3. Run the pipeline
 
 ```sh
-conda activate nf
-nextflow main.nf --fq_map your_fastq_map.tsv -profile slurm
+pixi run nextflow main.nf --fq_map your_fastq_map.tsv -profile pixi,slurm
 ```
 
-Replace `-profile slurm` with `-profile sge` or omit it for local execution.
+Replace `-profile pixi,slurm` with `-profile pixi,sge` or use `-profile pixi,standard` it for local execution.
 
 > **Before running on a cluster**, edit `nextflow.config` to match your lab's settings:
 > - **SGE:** eg., update `clusterOptions = "-P toconnor-lab -cwd -V"`
@@ -200,7 +166,7 @@ Control how the genome is divided for parallel joint calling via `--split`. The 
 Example:
 
 ```sh
-nextflow main.nf --split intervals
+nextflow main.nf -profile pixi,standard --split intervals
 ```
 
 ### Subset / partial runs
@@ -258,8 +224,7 @@ Note: you can use nextflow option `-output-dir [res_alt]` to change the results 
 Run a stub workflow to quickly validate workflow logic without executing real jobs:
 
 ```sh
-conda activate nf
-NXF_VER=26.04.6 nextflow main.nf -stub --vqsr true -without-conda
+pixi run nextflow main.nf -stub --vqsr true
 ```
 
 ---

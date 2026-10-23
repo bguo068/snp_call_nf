@@ -603,7 +603,7 @@ workflow {
     }
 
     // group read pairs if there are
-    ch_read_pairs = channel.fromPath(params.fq_map)
+    ch_read_pairs = channel.fromPath(params.fq_map, checkIfExists: true)
         .flatMap { csv -> csv.splitCsv(skip: 1, sep: '\t') }
         .map { row ->
             def fields = row as List<?>
@@ -631,7 +631,7 @@ workflow {
                 Parasite_ref_prefix: paths.parasite.fasta_prefix,
                 is_paired: fq.size() == 2 ? 1 : 0,
             )
-            def fq_paths = fq.collect { it -> file(it) }
+            def fq_paths = fq.collect { it -> file(it, checkIfExists: true) }
             return tuple(meta, fq_paths)
         }
         out_BOWTIE2_ALIGN_TO_CONCAT_GENOME = BOWTIE2_ALIGN_TO_CONCAT_GENOME(input_concat_ch)
@@ -654,7 +654,7 @@ workflow {
                 Host_ref_prefix: paths.host.fasta_prefix[host_id.toInteger()],
                 is_paired: fq.size() == 2 ? 1 : 0,
             )
-            def fq_paths = fq.collect { it -> file(it) }
+            def fq_paths = fq.collect { it -> file(it, checkIfExists: true) }
             return tuple(meta, fq_paths)
         }
 
@@ -682,7 +682,7 @@ workflow {
 
     // Non-blocking grouped gathering
     // csv contains sample, host_id, run, mate_id, fq_path
-    n_run = channel.fromPath(params.fq_map)
+    n_run = channel.fromPath(params.fq_map, checkIfExists: true)
         .flatMap { csv -> csv.splitCsv(skip: 1, sep: '\t') }
         .map { row ->
             def fields = row as List<?>

@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import ftplib
+import os
 import sys
 from pathlib import Path
 from subprocess import run
@@ -52,6 +53,29 @@ class URLS:
     }
 
 
+def tmp_path(fn) -> str:
+    """Temporary path next to `fn`, keeping the final extension so tools that
+    infer the format from the extension still work: a/b.dict -> a/b.tmp.dict.
+
+    Outputs are written to tmp paths and only renamed to their final names once
+    complete, so an interrupted run never leaves a partial file that a later
+    run would mistake for a finished one."""
+    p = Path(fn)
+    return str(p.with_name(f"{p.stem}.tmp{p.suffix}"))
+
+
+def run_bash(cmd: str):
+    # bash with pipefail so failures on the left side of a pipe are not masked
+    return run(
+        f"set -euo pipefail\n{cmd}",
+        shell=True,
+        executable="/bin/bash",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 def download_genome_fasta_files():
     for genome in URLS.genomes:
         prefix = genome["prefix"]
@@ -68,25 +92,34 @@ def download_genome_fasta_files():
         if Path(target_fn).exists():
             continue
 
+        target_tmp = tmp_path(target_fn)
+
         if "https://github.com/bguo068/snpeff_annot/releases" in url:
+            # extract the member to stdout so it lands in the tmp file
             cmd = f"""
-              wget -qO- --max-redirect=20 {url}  | tar -xzf - {target_fn}
+              wget -qO- --max-redirect=20 {url}  | tar -xzf - -O {target_fn} > {target_tmp}
             """
-            run(cmd, shell=True, check=True)
+            res = run_bash(cmd)
+            if res.returncode != 0:
+                print(res.stderr)
+                sys.exit(-1)
+            os.replace(target_tmp, target_fn)
             continue
 
+        local_tmp = tmp_path(local_fn)
         with requests.get(url, allow_redirects=True, stream=True) as response:
             response.raise_for_status()
-            with open(local_fn, "wb") as f:
+            with open(local_tmp, "wb") as f:
                 f.writelines(response.iter_content(chunk_size=8192))
+        os.replace(local_tmp, local_fn)
 
         if local_fn.endswith(".gz"):
-            res = run(
-                f"""gzip -dc {local_fn} > {target_fn}; rm {local_fn}""",
-                shell=True,
-                check=False,
-            )
-            assert res.returncode == 0
+            res = run_bash(f"gzip -dc {local_fn} > {target_tmp}")
+            if res.returncode != 0:
+                print(res.stderr)
+                sys.exit(-1)
+            os.replace(target_tmp, target_fn)
+            Path(local_fn).unlink()
 
 
 def concat_pf_human_genomes():
@@ -96,11 +129,13 @@ def concat_pf_human_genomes():
     if Path(concat_g).exists():
         return
     Path(concat_g).parent.mkdir(parents=True, exist_ok=True)
-    cmd = f"cat {host_g} {pf_g} > {concat_g}"
+    concat_tmp = tmp_path(concat_g)
+    cmd = f"cat {host_g} {pf_g} > {concat_tmp}"
     res = run(cmd, shell=True, capture_output=True, check=False)
     if res.returncode != 0:
         print(res.stderr)
         sys.exit(-1)
+    os.replace(concat_tmp, concat_g)
 
 
 def index_fasta_files():
@@ -110,30 +145,45 @@ def index_fasta_files():
         # bt2 indices
         if not Path(fa_prefix + ".1.bt2").exists():
             print(Path(fa_prefix + ".1.bt2"))
-            cmd = f"bowtie2-build --threads 20 {fa_prefix}.fasta {fa_prefix}"
+            tmp_prefix = fa_prefix + ".tmp"
+            cmd = f"bowtie2-build --threads 20 {fa_prefix}.fasta {tmp_prefix}"
             print(f"\t building bt2 indices for {fa_fn}")
             res = run(cmd, shell=True, capture_output=True, check=False)
             if res.returncode != 0:
                 print(res.stderr)
                 sys.exit(-1)
+            # rename .1.bt2 last as it is the file checked for existence above
+            tmp_files = sorted(
+                Path(tmp_prefix).parent.glob(Path(tmp_prefix).name + ".*bt2*"),
+                key=lambda p: p.name.endswith(".1.bt2"),
+            )
+            for p in tmp_files:
+                os.replace(p, fa_prefix + p.name[len(Path(tmp_prefix).name) :])
         # fai index
-        if not Path(fa_prefix + ".fasta.fai").exists():
-            cmd = f"samtools faidx {fa_prefix}.fasta"
+        fai_fn = fa_prefix + ".fasta.fai"
+        if not Path(fai_fn).exists():
+            fai_tmp = tmp_path(fai_fn)
+            cmd = f"samtools faidx {fa_prefix}.fasta --fai-idx {fai_tmp}"
             print(f"\t building fai index for {fa_fn}")
             res = run(cmd, shell=True, capture_output=True, check=False)
             if res.returncode != 0:
                 print(res.stderr)
                 sys.exit(-1)
+            os.replace(fai_tmp, fai_fn)
         # dict index
-        if not Path(fa_prefix + ".dict").exists():
+        dict_fn = fa_prefix + ".dict"
+        if not Path(dict_fn).exists():
+            dict_tmp = tmp_path(dict_fn)
+            Path(dict_tmp).unlink(missing_ok=True)  # gatk refuses to overwrite
             cmd = f"""
-            gatk --java-options "-Xmx10G" CreateSequenceDictionary -R {fa_prefix}.fasta -O {fa_prefix}.dict
+            gatk --java-options "-Xmx10G" CreateSequenceDictionary -R {fa_prefix}.fasta -O {dict_tmp}
             """
             print(f"\t building dict index for {fa_fn}")
-            res = run(cmd, shell=True, capture_output=True, check=True)
+            res = run(cmd, shell=True, capture_output=True, check=False)
             if res.returncode != 0:
                 print(res.stderr)
                 sys.exit(-1)
+            os.replace(dict_tmp, dict_fn)
 
 
 def download_pf_crosses_v1_vcfs():
@@ -149,16 +199,19 @@ def download_pf_crosses_v1_vcfs():
     ftp_server.cwd(URLS.pf_crosses_v1["remotedir"])  # ty: ignore[invalid-argument-type]
     for remote_filename, local_filename in zip(remote_filename_lst, local_filename_lst):
         if not Path(local_filename).exists():
-            with open(local_filename, "wb") as file:
+            local_tmp = tmp_path(local_filename)
+            with open(local_tmp, "wb") as file:
                 print("download " + remote_filename)
                 ftp_server.retrbinary("RETR " + remote_filename, file.write)
+            os.replace(local_tmp, local_filename)
     ftp_server.quit()
 
     # index vcf file with
     for local_fn in local_filename_lst:
         idx_fn = local_fn + ".tbi"
         if not Path(idx_fn).exists():
-            cmd = f"gatk IndexFeatureFile -I {local_fn}"
+            idx_tmp = tmp_path(idx_fn)
+            cmd = f"gatk IndexFeatureFile -I {local_fn} -O {idx_tmp}"
             res = run(cmd, shell=True, capture_output=True, text=True, check=False)
             if (
                 res.returncode != 0
@@ -167,6 +220,7 @@ def download_pf_crosses_v1_vcfs():
             ):
                 print(res.stderr)
                 sys.exit(-1)
+            os.replace(idx_tmp, idx_fn)
 
 
 def known_variants_from_pf_crosses_v1():
@@ -176,29 +230,32 @@ def known_variants_from_pf_crosses_v1():
     # keep pass only
     for origf, passf in zip(local_filename_lst, filt_filename_lst):
         print("filter " + origf)
-        _res = run(
+        pass_tmp = tmp_path(passf)
+        res = run_bash(
             f"""
-            bcftools view -f PASS {origf} -Oz -o {passf}
-            bcftools index {passf}
-            tabix {passf}
-            """,
-            shell=True,
-            capture_output=True,
-            text=True,
-            check=True,
+            bcftools view -f PASS {origf} -Oz -o {pass_tmp}
+            bcftools index -f {pass_tmp}
+            tabix -f {pass_tmp}
+            """
         )
+        if res.returncode != 0:
+            print(res.stderr)
+            sys.exit(-1)
+        # move indices first so the vcf only appears once everything is done
+        os.replace(pass_tmp + ".csi", passf + ".csi")
+        os.replace(pass_tmp + ".tbi", passf + ".tbi")
+        os.replace(pass_tmp, passf)
 
     # merge vcfs and generate .idx file
     print("merge filtered vcfs and generate.idx file")
     filt_filename_str = " ".join(filt_filename_lst)
     known_variants_vcf = URLS.pf_crosses_v1["known_variants_vcf"]
-    cmd = (
-        f"""
-        bcftools merge --force-samples {filt_filename_str}  -Ov -o {known_variants_vcf}
-        gatk IndexFeatureFile -I {known_variants_vcf}
-        """,
-    )
-    res = run(cmd, shell=True, capture_output=True, text=True, check=True)
+    known_variants_tmp = tmp_path(known_variants_vcf)
+    cmd = f"""
+        bcftools merge --force-samples {filt_filename_str}  -Ov -o {known_variants_tmp}
+        gatk IndexFeatureFile -I {known_variants_tmp}
+        """
+    res = run_bash(cmd)
     if (
         res.returncode != 0
         or "error" in res.stderr.lower()
@@ -206,6 +263,8 @@ def known_variants_from_pf_crosses_v1():
     ):
         print(res.stderr)
         sys.exit(-1)
+    os.replace(known_variants_tmp + ".idx", known_variants_vcf + ".idx")
+    os.replace(known_variants_tmp, known_variants_vcf)
 
 
 def check_if_all_files_exist_already():

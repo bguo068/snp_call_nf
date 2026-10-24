@@ -6,6 +6,7 @@ platforms = ["osx-arm64", "linux-64", "linux-aarch64", "osx-64"]
 version = "0.2.0"
 
 [tasks]
+install = "pixi install --locked"
 prep-ref = "cd ref && python prep_ref_files.py"
 
 test-stub-default = "nextflow run main.nf -stub"
@@ -31,4 +32,3 @@ samtools = "1.20.*"
 bcftools = "1.20.*"
 requests = ">=2.34.2,<3"
 wget = ">=1.25.0,<2"
-

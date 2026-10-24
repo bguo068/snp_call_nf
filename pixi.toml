@@ -8,6 +8,7 @@ version = "0.2.0"
 [tasks]
 install = "pixi install --locked"
 prep-ref = "cd ref && python prep_ref_files.py"
+prep-enadata = "cd ena_data && bash download_ena_data.sh"
 
 test-stub-default = "nextflow run main.nf -stub"
 test-stub-partial-parasite-reads-only = "nextflow run main.nf -stub --parasite_reads_only"
@@ -17,6 +18,7 @@ test-stub-partial-gvcf-only = "nextflow run main.nf -stub --gvcf_only"
 test-default = "nextflow main.nf -profile pixi,standard"
 test-split = "nextflow main.nf -profile pixi,standard --split intervals"
 test-vqsr = "nextflow main.nf --vqsr true -profile pixi,standard,test"
+test-ena = {cmd = "nextflow main.nf -profile pixi,standard --fq_map ./ena_data/ena_fastq_map.tsv", depends-on = ["prep-enadata"]}
 
 # --------------------------------------------------------------------------------------
 test-stub = { depends-on = ["test-stub-default", "test-stub-partial-parasite-reads-only", "test-stub-partial-coverage-only", "test-stub-partial-gvcf-only"  ] }
